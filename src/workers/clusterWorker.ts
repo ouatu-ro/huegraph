@@ -34,7 +34,7 @@ type PaletteColor = {
 type ColorgramStat = [number, number, number, number];
 
 type WorkerMsg =
-  | { type: "INIT"; kColors?: number }
+  | { type: "INIT"; kColors?: number; baseUrl?: string }
   | {
       type: "RUN_CLUSTER";
       layer: HierKey;
@@ -68,6 +68,7 @@ let ordMaps: Record<HierKey, Map<string, number>> | null = null;
 let ordLists: Record<HierKey, string[]> | null = null;
 let distsCache: Record<HierKey, Float32Array[]> | null = null;
 let colorFamilyPalette: string[] | null = null;
+let basePath = "/";
 
 const LAYERS: readonly HierKey[] = [
   "xkcd_color",
@@ -339,7 +340,7 @@ async function buildDistributions(kColors: number) {
 
 async function loadSamplesTarGz() {
   logInfo("fetching samples");
-  const res = await fetch("/samples.tar.gz");
+  const res = await fetch(`${basePath}samples.tar.gz`);
   if (!res.ok) {
     throw new Error(`Failed to fetch samples: ${res.status} ${res.statusText}`);
   }
@@ -385,7 +386,7 @@ async function loadSamplesTarGz() {
 
 async function loadTaxonomy() {
   logInfo("fetching taxonomy");
-  const res = await fetch(new URL("colornamer.json", import.meta.env.BASE_URL));
+  const res = await fetch(`${basePath}colornamer.json`);
   const data: RawTaxEntry[] = await res.json();
   const parsed: TaxEntry[] = [];
   let dropped = 0;
@@ -418,6 +419,10 @@ self.onmessage = async (evt: MessageEvent<WorkerMsg>) => {
   const msg = evt.data;
 
   if (msg.type === "INIT") {
+    if (msg.baseUrl) {
+      basePath = msg.baseUrl;
+    }
+
     const kColors = msg.kColors ?? 6;
     logInfo("INIT requested", { kColors });
 

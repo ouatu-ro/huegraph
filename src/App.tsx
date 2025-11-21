@@ -164,7 +164,9 @@ export default function App() {
       }
     };
 
-    worker.postMessage({ type: "INIT", kColors: K_COLORS });
+    worker.postMessage({
+      type: "INIT", kColors: K_COLORS, baseUrl: import.meta.env.BASE_URL,
+    });
   });
 
   onCleanup(() => worker.terminate());
