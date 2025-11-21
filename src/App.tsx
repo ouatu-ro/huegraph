@@ -63,6 +63,8 @@ import {
 } from "./appConfig";
 import "./App.css";
 
+const assetUrl = (path: string) => new URL(path, import.meta.env.BASE_URL).toString();
+
 const defaultPlacement = (id: string, order: number): PanelPlacement => {
   const col = order % PANEL_GRID_COLUMNS;
   const row = Math.floor(order / PANEL_GRID_COLUMNS);
@@ -353,7 +355,7 @@ export default function App() {
     zoomPan.focusRect(panel, CLUSTER_FOCUS_PAD);
   };
 
-  const thumbSrc = (i: number) => imageUrls()?.[i] ?? `/sample-images/${i + 1}.jpg`;
+  const thumbSrc = (i: number) => imageUrls()?.[i] ?? assetUrl(`sample-images/${i + 1}.jpg`);
   const arrangePanels = () => {
     const entries = Object.entries(panelStates());
     const n = entries.length;

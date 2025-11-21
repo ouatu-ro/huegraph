@@ -385,7 +385,7 @@ async function loadSamplesTarGz() {
 
 async function loadTaxonomy() {
   logInfo("fetching taxonomy");
-  const res = await fetch("/colornamer.json");
+  const res = await fetch(new URL("colornamer.json", import.meta.env.BASE_URL));
   const data: RawTaxEntry[] = await res.json();
   const parsed: TaxEntry[] = [];
   let dropped = 0;
