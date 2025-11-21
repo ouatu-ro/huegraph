@@ -3,6 +3,7 @@ import { createZoomPan } from "./useZoomPan";
 import ClusterWorker from "./workers/clusterWorker?worker";
 import ControlPanel from "./components/ControlPanel";
 import ClusterPanel from "./components/ClusterPanel";
+import PhotoWindow from "./components/PhotoWindow";
 import ZoomWidget from "./components/ZoomWidget";
 import { styleFor } from "./utils/panelStyle";
 import type {
@@ -44,6 +45,13 @@ import {
   PANEL_GRID_ROW_SPACING,
   PANEL_ROW_EVEN_OFFSET,
   PANEL_ZTOP_START,
+  PANEL_MAXIMIZE_MIN_HEIGHT,
+  PANEL_MAXIMIZE_MIN_WIDTH,
+  PANEL_MAXIMIZE_PADDING,
+  PHOTO_WINDOW_ID,
+  PHOTO_WINDOW_RATIO,
+  PHOTO_WINDOW_DEFAULT_HEIGHT,
+  PHOTO_WINDOW_DEFAULT_WIDTH,
   WORKSPACE_HEIGHT,
   WORKSPACE_WIDTH,
   ZOOM_MAX,
@@ -83,7 +91,14 @@ export default function App() {
   const [runId, setRunId] = createSignal(0);
 
   const [panelStates, setPanelStates] = createSignal<PanelPlacementMap>({});
+  const [previewPanel, setPreviewPanel] = createSignal<PanelPlacement | null>(null);
+  const [previewImageIdx, setPreviewImageIdx] = createSignal<number | null>(null);
+  const [previewSizePx, setPreviewSizePx] = createSignal<{ width: number; height: number }>({
+    width: PHOTO_WINDOW_DEFAULT_WIDTH,
+    height: PHOTO_WINDOW_DEFAULT_HEIGHT,
+  });
   const [initialArrangeDone, setInitialArrangeDone] = createSignal(false);
+  const [maximizedPanels, setMaximizedPanels] = createSignal<Record<string, PanelPlacement>>({});
   const [controlPanel, setControlPanel] = createSignal<PanelPlacement>({
     id: CONTROL_PANEL_ID,
     x: CONTROL_PANEL_INITIAL_X,
@@ -242,6 +257,96 @@ export default function App() {
   const updateControlPanel = (patch: Partial<PanelPlacement>) =>
     setControlPanel((prev) => ({ ...prev, ...patch }));
 
+  const closePhotoPreview = () => {
+    setPreviewImageIdx(null);
+    setPreviewPanel(null);
+  };
+
+  const updatePhotoPreview = (patch: Partial<PanelPlacement>) =>
+    setPreviewPanel((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...patch };
+      const scale = zoomPan.getView().scale;
+      setPreviewSizePx({ width: next.width * scale, height: next.height * scale });
+      return next;
+    });
+
+  const bringPreviewToFront = () => {
+    const next = zTop() + 1;
+    setZTop(next);
+    setPreviewPanel((prev) => (prev ? { ...prev, zIndex: next } : prev));
+  };
+
+  const openPhotoPreview = (idx: number) => {
+    const ratio = PHOTO_WINDOW_RATIO;
+    const size = previewSizePx();
+    const widthScreen = size.width || window.innerWidth * ratio;
+    const heightScreen = size.height || window.innerHeight * ratio;
+    const leftScreen = (window.innerWidth - widthScreen) / 2;
+    const topScreen = (window.innerHeight - heightScreen) / 2;
+    const view = zoomPan.getView();
+    const scale = view.scale;
+    const topLeft = zoomPan.screenToWorld({ x: leftScreen, y: topScreen }, view);
+    const widthWorld = widthScreen / scale;
+    const heightWorld = heightScreen / scale;
+    const next = zTop() + 1;
+    setZTop(next);
+    setPreviewImageIdx(idx);
+    setPreviewPanel({
+      id: PHOTO_WINDOW_ID,
+      x: topLeft.x,
+      y: topLeft.y,
+      width: widthWorld,
+      height: heightWorld,
+      zIndex: next,
+    });
+  };
+
+  createEffect(() => {
+    if (!previewPanel()) return;
+    const listener = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closePhotoPreview();
+    };
+    window.addEventListener("keydown", listener);
+    return () => window.removeEventListener("keydown", listener);
+  });
+
+  const toggleMaximize = (id: string) => {
+    const current = panelStates()[id];
+    if (!current) return;
+    const maximized = maximizedPanels();
+    if (maximized[id]) {
+      const previous = maximized[id];
+      setPanelStates((prev) => ({ ...prev, [id]: previous }));
+      setMaximizedPanels((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      return;
+    }
+    if (typeof window === "undefined") return;
+    const padding = PANEL_MAXIMIZE_PADDING;
+    const topLeft = zoomPan.screenToWorld({ x: padding, y: padding });
+    const bottomRight = zoomPan.screenToWorld({
+      x: window.innerWidth - padding,
+      y: window.innerHeight - padding,
+    });
+    const availableWidth = Math.max(0, bottomRight.x - topLeft.x);
+    const availableHeight = Math.max(0, bottomRight.y - topLeft.y);
+    const width = Math.max(PANEL_MAXIMIZE_MIN_WIDTH, availableWidth);
+    const height = Math.max(PANEL_MAXIMIZE_MIN_HEIGHT, availableHeight);
+    const centerX = (topLeft.x + bottomRight.x) / 2;
+    const centerY = (topLeft.y + bottomRight.y) / 2;
+    const newX = centerX - width / 2;
+    const newY = centerY - height / 2;
+    setMaximizedPanels((prev) => ({ ...prev, [id]: { ...current } }));
+    setPanelStates((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], x: newX, y: newY, width, height },
+    }));
+  };
+
   const focusClusterPanel = (id: string, fallback: PanelPlacement) => {
     bumpZ(id);
     const panel = panelStates()[id] ?? fallback;
@@ -271,7 +376,7 @@ export default function App() {
     const availH = Math.max(1, vh - padT - padB);
 
     // sqrt grid
-    const cols = Math.ceil(Math.sqrt(n));
+    const cols = Math.min(4, Math.ceil(Math.sqrt(n) + 1));
     const rows = Math.ceil(n / cols);
 
     // panel size in SCREEN pixels (so they fill the view)
@@ -409,10 +514,24 @@ export default function App() {
                   order={order()}
                   zoom={zoomPan.zoom}
                   onFocus={() => focusClusterPanel(key, fallback)}
+                  onMaximizeToggle={() => toggleMaximize(key)}
+                  onPhotoPreview={openPhotoPreview}
                 />
               );
             }}
           </For>
+
+          <Show when={previewPanel() && previewImageIdx() !== null}>
+            <PhotoWindow
+              state={() => previewPanel() ?? undefined}
+              style={styleFor(previewPanel() ?? undefined)}
+              bringToFront={bringPreviewToFront}
+              onUpdate={updatePhotoPreview}
+              onClose={closePhotoPreview}
+              imageSrc={previewImageIdx() !== null ? thumbSrc(previewImageIdx()!) : ""}
+              zoom={zoomPan.zoom}
+            />
+          </Show>
         </Show>
 
         <Show when={isClustering()}>
@@ -454,6 +573,17 @@ export default function App() {
         </div>
       </Show>
       <ZoomWidget zoom={zoomPan.zoom} zoomIn={zoomPan.zoomIn} zoomOut={zoomPan.zoomOut} reset={resetView} />
+      <Show when={previewPanel() && previewImageIdx() !== null}>
+        <PhotoWindow
+          state={() => previewPanel() ?? undefined}
+          style={styleFor(previewPanel() ?? undefined)}
+          bringToFront={bringPreviewToFront}
+          onUpdate={updatePhotoPreview}
+          onClose={closePhotoPreview}
+          imageSrc={previewImageIdx() !== null ? thumbSrc(previewImageIdx()!) : ""}
+          zoom={zoomPan.zoom}
+        />
+      </Show>
     </div>
   );
 }

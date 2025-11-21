@@ -60,3 +60,12 @@ export const CLUSTER_THUMB_SIZE = 64;
 export const CLUSTER_THUMB_MARGIN = 4;
 
 export const CLUSTER_FOCUS_PAD = 80;
+
+export const PANEL_MAXIMIZE_PADDING = 40;
+export const PANEL_MAXIMIZE_MIN_WIDTH = 360;
+export const PANEL_MAXIMIZE_MIN_HEIGHT = 300;
+
+export const PHOTO_WINDOW_ID = "photo-window";
+export const PHOTO_WINDOW_RATIO = 0.66;
+export const PHOTO_WINDOW_DEFAULT_WIDTH = 200;
+export const PHOTO_WINDOW_DEFAULT_HEIGHT = 200;

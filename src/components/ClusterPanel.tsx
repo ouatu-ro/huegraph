@@ -25,6 +25,8 @@ export type ClusterPanelProps = {
   order: number;
   zoom: Accessor<number>;
   onFocus: () => void;
+  onMaximizeToggle: () => void;
+  onPhotoPreview: (idx: number) => void;
 };
 
 export default function ClusterPanel(props: ClusterPanelProps) {
@@ -160,7 +162,13 @@ export default function ClusterPanel(props: ClusterPanelProps) {
       onMouseDown={() => props.bringToFront()}
       onTouchStart={() => props.bringToFront()}
     >
-      <div class="panel-header">
+      <div
+        class="panel-header"
+        onDblClick={(e) => {
+          e.stopPropagation();
+          props.onMaximizeToggle();
+        }}
+      >
         <div>
           <div class="panel-title">{titleFor()}</div>
           <div class="panel-subtitle">{props.count} items</div>
@@ -199,6 +207,7 @@ export default function ClusterPanel(props: ClusterPanelProps) {
                   height: `${CLUSTER_THUMB_SIZE * props.zoom()}px`,
                   margin: `${CLUSTER_THUMB_MARGIN * props.zoom()}px`,
                 }}
+                onDblClick={() => props.onPhotoPreview(idx)}
               >
                 <div class="item-content">
                   <img

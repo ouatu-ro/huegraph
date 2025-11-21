@@ -69,7 +69,12 @@ let ordLists: Record<HierKey, string[]> | null = null;
 let distsCache: Record<HierKey, Float32Array[]> | null = null;
 let colorFamilyPalette: string[] | null = null;
 
-const LAYERS: readonly HierKey[] = ["xkcd_color", "design_color", "common_color", "color_family"];
+const LAYERS: readonly HierKey[] = [
+  "xkcd_color",
+  "design_color",
+  "common_color",
+  "color_family",
+];
 const WORKER_TAG = "[clusterWorker]";
 
 const logInfo = (message: string, data?: unknown) => {
@@ -101,8 +106,10 @@ function fail(stage: string, error: unknown): never {
 function nearestTaxonomy(rgb: [number, number, number]) {
   if (!tax.length) throw new Error("taxonomy not loaded");
   if (!rgb) throw new Error("palette color missing rgb");
-  if (!Array.isArray(rgb) || rgb.length < 3) throw new Error("palette color rgb malformed");
-  if (rgb.some((v) => typeof v !== "number" || Number.isNaN(v))) throw new Error("palette color rgb non-numeric");
+  if (!Array.isArray(rgb) || rgb.length < 3)
+    throw new Error("palette color rgb malformed");
+  if (rgb.some((v) => typeof v !== "number" || Number.isNaN(v)))
+    throw new Error("palette color rgb non-numeric");
   // brute NN in RGB space (same spirit as your notebook)
   let best: TaxEntry | null = null;
   let bestD = Infinity;
@@ -126,12 +133,22 @@ async function bitmapToImageData(bmp: ImageBitmap) {
   return ctx.getImageData(0, 0, bmp.width, bmp.height);
 }
 
-async function extractPalette(bmp: ImageBitmap, kColors: number): Promise<PaletteColor[]> {
+async function extractPalette(
+  bmp: ImageBitmap,
+  kColors: number
+): Promise<PaletteColor[]> {
   const id = await bitmapToImageData(bmp);
-  const pixelData = new Uint8Array(id.data.buffer, id.data.byteOffset, id.data.byteLength);
+  const pixelData = new Uint8Array(
+    id.data.buffer,
+    id.data.byteOffset,
+    id.data.byteLength
+  );
 
   // The library works on raw pixel buffers and returns palette entries shaped like [r, g, b, proportion].
-  const stats = extract({ data: pixelData, channels: Channels.RGBAlpha }, kColors) as ColorgramStat[];
+  const stats = extract(
+    { data: pixelData, channels: Channels.RGBAlpha },
+    kColors
+  ) as ColorgramStat[];
 
   const palette: PaletteColor[] = [];
   for (const entry of stats) {
@@ -147,7 +164,10 @@ async function extractPalette(bmp: ImageBitmap, kColors: number): Promise<Palett
   }
 
   if (palette.length === 0) {
-    logError("no palette colors extracted", { width: bmp.width, height: bmp.height });
+    logError("no palette colors extracted", {
+      width: bmp.width,
+      height: bmp.height,
+    });
   }
 
   return palette;
@@ -278,8 +298,15 @@ async function buildDistributions(kColors: number) {
 
     for (const c of palette) {
       const rgb = c?.rgb;
-      if (!Array.isArray(rgb) || rgb.length < 3 || rgb.some((v) => typeof v !== "number" || Number.isNaN(v))) {
-        logError("skipping palette entry with invalid rgb", { paletteIndex: palette.indexOf(c), rgb });
+      if (
+        !Array.isArray(rgb) ||
+        rgb.length < 3 ||
+        rgb.some((v) => typeof v !== "number" || Number.isNaN(v))
+      ) {
+        logError("skipping palette entry with invalid rgb", {
+          paletteIndex: palette.indexOf(c),
+          rgb,
+        });
         continue;
       }
       const nearest = nearestTaxonomy(rgb as [number, number, number]);
@@ -395,13 +422,27 @@ self.onmessage = async (evt: MessageEvent<WorkerMsg>) => {
     logInfo("INIT requested", { kColors });
 
     try {
-      (self as any).postMessage({ type: "PROGRESS", phase: "loading taxonomy", done: 0, total: 1 });
+      (self as any).postMessage({
+        type: "PROGRESS",
+        phase: "loading taxonomy",
+        done: 0,
+        total: 1,
+      });
       await loadTaxonomy();
 
-      (self as any).postMessage({ type: "PROGRESS", phase: "loading samples", done: 0, total: 1 });
+      (self as any).postMessage({
+        type: "PROGRESS",
+        phase: "loading samples",
+        done: 0,
+        total: 1,
+      });
       await loadSamplesTarGz();
 
-      (self as any).postMessage({ type: "READY", nImages: images.length, imageUrls } satisfies WorkerOut);
+      (self as any).postMessage({
+        type: "READY",
+        nImages: images.length,
+        imageUrls,
+      } satisfies WorkerOut);
       logInfo("precomputing palette distributions");
 
       // cache distributions so clustering is instant on button press
@@ -447,20 +488,15 @@ self.onmessage = async (evt: MessageEvent<WorkerMsg>) => {
       } else {
         // DBSCAN with custom distance
         const db = new DBSCAN();
-        clusters = db.run(
-          data,
-          eps,
-          minPts,
-          (a: number[], b: number[]) => {
-            // Euclid in sqrt-space
-            let s = 0;
-            for (let i = 0; i < a.length; i++) {
-              const d = a[i] - b[i];
-              s += d * d;
-            }
-            return Math.sqrt(s);
+        clusters = db.run(data, eps, minPts, (a: number[], b: number[]) => {
+          // Euclid in sqrt-space
+          let s = 0;
+          for (let i = 0; i < a.length; i++) {
+            const d = a[i] - b[i];
+            s += d * d;
           }
-        );
+          return Math.sqrt(s);
+        });
       }
 
       clusters.forEach((cluster, ci) => {
@@ -469,7 +505,13 @@ self.onmessage = async (evt: MessageEvent<WorkerMsg>) => {
 
       const colorFamilyDist = summarizeColorFamilies(labels);
 
-      (self as any).postMessage({ type: "CLUSTERS", labels, layer, runId, colorFamilyDist } satisfies WorkerOut);
+      (self as any).postMessage({
+        type: "CLUSTERS",
+        labels,
+        layer,
+        runId,
+        colorFamilyDist,
+      } satisfies WorkerOut);
       logInfo("RUN_CLUSTER completed", { nClusters: clusters.length, method });
     } catch (error) {
       fail("cluster", error);
@@ -477,7 +519,9 @@ self.onmessage = async (evt: MessageEvent<WorkerMsg>) => {
   }
 };
 
-function summarizeColorFamilies(labels: number[]): ClusterDistribution[] | undefined {
+function summarizeColorFamilies(
+  labels: number[]
+): ClusterDistribution[] | undefined {
   if (!distsCache || !ordLists || !colorFamilyPalette) return undefined;
   const famVecs = distsCache.color_family;
   if (!famVecs.length) return undefined;
