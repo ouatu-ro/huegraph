@@ -1,24 +1,20 @@
 import type { Accessor } from "solid-js";
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
-import interact from "interactjs";
-import Muuri from "muuri";
 import { createZoomPan } from "./useZoomPan";
 import ClusterWorker from "./workers/clusterWorker?worker";
+import ControlPanel from "./components/ControlPanel";
+import ClusterPanel from "./components/ClusterPanel";
+import ZoomWidget from "./components/ZoomWidget";
+import { styleFor } from "./utils/panelStyle";
+import type {
+  ClusterDistribution,
+  ClusterDistributionMap,
+  HierKey,
+  ClusterMethod,
+  PanelPlacement,
+  PanelPlacementMap,
+} from "./types";
 import "./App.css";
-
-type HierKey = "xkcd_color" | "design_color" | "common_color" | "color_family";
-type ClusterMethod = "dbscan" | "kmeans";
-
-type PanelPlacement = {
-  id: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  zIndex: number;
-};
-
-type ClusterDistribution = { id: number; parts: { name: string; pct: number; color: string }[] };
 
 const CONTROL_PANEL_ID = "control-panel";
 
@@ -35,17 +31,6 @@ const defaultPlacement = (id: string, order: number): PanelPlacement => {
   };
 };
 
-const styleFor = (panel?: PanelPlacement): Record<string, string> =>
-  panel
-    ? {
-      left: `${panel.x}px`,
-      top: `${panel.y}px`,
-      width: `${panel.width}px`,
-      height: `${panel.height}px`,
-      "z-index": `${panel.zIndex}`,
-    }
-    : {};
-
 export default function App() {
   const [ready, setReady] = createSignal(false);
   const [progress, setProgress] = createSignal<{ phase: string; done: number; total: number } | null>(null);
@@ -60,7 +45,7 @@ export default function App() {
   const [hasRun, setHasRun] = createSignal(false);
   const [runId, setRunId] = createSignal(0);
 
-  const [panelStates, setPanelStates] = createSignal<Record<string, PanelPlacement>>({});
+  const [panelStates, setPanelStates] = createSignal<PanelPlacementMap>({});
   const [controlPanel, setControlPanel] = createSignal<PanelPlacement>({
     id: CONTROL_PANEL_ID,
     x: 24,
@@ -70,9 +55,7 @@ export default function App() {
     zIndex: 100,
   });
   const [zTop, setZTop] = createSignal(120);
-  const [clusterDists, setClusterDists] = createSignal<Record<string, { name: string; pct: number; color: string }[]>>(
-    {}
-  );
+  const [clusterDists, setClusterDists] = createSignal<ClusterDistributionMap>({});
   const zoomPan = createZoomPan({ width: 6000, height: 4000, minZoom: 0.5, maxZoom: 2.5 });
   const resetView = () => zoomPan.resetView(controlPanel());
 
@@ -92,7 +75,7 @@ export default function App() {
       if (m.type === "CLUSTERS") {
         if (m.runId == null || m.runId === runId()) {
           setLabels(m.labels);
-          const dist: Record<string, { name: string; pct: number; color: string }[]> = {};
+          const dist: ClusterDistributionMap = {};
           (m.colorFamilyDist ?? []).forEach((entry: ClusterDistribution) => {
             dist[String(entry.id)] = entry.parts;
           });
@@ -247,9 +230,16 @@ export default function App() {
     const rowWorldH = rowScreenH / scale;
 
     console.log("[arrangePanels]", {
-      n, cols, rows, panX, panY, scale,
-      panelScreenW, panelScreenH,
-      baseWorldX, baseWorldY
+      n,
+      cols,
+      rows,
+      panX,
+      panY,
+      scale,
+      panelScreenW,
+      panelScreenH,
+      baseWorldX,
+      baseWorldY,
     });
 
     setPanelStates((prev) => {
@@ -290,9 +280,7 @@ export default function App() {
       <div
         class="workspace-canvas"
         ref={zoomPan.canvasRef}
-        style={{
-          cursor: zoomPan.isPanning() ? "grabbing" : "grab",
-        }}
+        style={{ cursor: zoomPan.isPanning() ? "grabbing" : "grab" }}
       >
         <Show when={ready()}>
           <ControlPanel
@@ -356,408 +344,6 @@ export default function App() {
         </Show>
       </div>
       <ZoomWidget zoom={zoomPan.zoom} zoomIn={zoomPan.zoomIn} zoomOut={zoomPan.zoomOut} reset={resetView} />
-    </div>
-  );
-}
-
-type ControlPanelProps = {
-  state: Accessor<PanelPlacement>;
-  style: Record<string, string>;
-  bringToFront: () => void;
-  onUpdate: (patch: Partial<PanelPlacement>) => void;
-  zoom: Accessor<number>;
-  setZoom: (z: number) => void;
-  resetView: () => void;
-  arrangePanels: () => void;
-  layer: HierKey;
-  setLayer: (v: HierKey) => void;
-  method: ClusterMethod;
-  setMethod: (v: ClusterMethod) => void;
-  eps: number;
-  setEps: (v: number) => void;
-  minPts: number;
-  setMinPts: (v: number) => void;
-  kMeansK: number;
-  setKMeansK: (v: number) => void;
-  isClustering: boolean;
-  hasRun: boolean;
-  runCluster: () => void;
-  progress: { phase: string; done: number; total: number } | null;
-  ready: boolean;
-};
-
-function ControlPanel(props: ControlPanelProps) {
-  let panelRef: HTMLDivElement | undefined;
-
-  onMount(() => {
-    if (!panelRef) return;
-    const drag = interact(panelRef).draggable({
-      inertia: false,
-      allowFrom: ".panel-header",
-      ignoreFrom: ".panel-body",
-      listeners: {
-        start() {
-          document.body.classList.add("no-select");
-        },
-        move(ev) {
-          props.bringToFront();
-          const cur = props.state();
-          const scale = props.zoom();
-          props.onUpdate({ x: cur.x + ev.dx / scale, y: cur.y + ev.dy / scale });
-        },
-        end() {
-          document.body.classList.remove("no-select");
-        },
-      },
-    });
-    onCleanup(() => drag.unset());
-  });
-
-  const statusText = () => {
-    if (!props.ready) return "Loading…";
-    if (props.isClustering) return "Clustering…";
-    if (props.progress) return props.progress.phase;
-    return "Ready";
-  };
-
-  return (
-    <div
-      ref={panelRef}
-      class="panel-window control-panel"
-      style={props.style}
-      onMouseDown={() => props.bringToFront()}
-      onTouchStart={() => props.bringToFront()}
-    >
-      <div class="panel-header">
-        <div>
-          <div class="panel-title">Controls</div>
-          <div class="panel-subtitle">drag the bar to move</div>
-        </div>
-        <div class="chip muted">{statusText()}</div>
-      </div>
-      <div class="panel-body">
-        <div class="pill-row">
-          <ToggleGroup
-            label="Layer"
-            value={props.layer}
-            options={[
-              { label: "xkcd", value: "xkcd_color" },
-              { label: "design", value: "design_color" },
-              { label: "common", value: "common_color" },
-              { label: "family", value: "color_family" },
-            ]}
-            onChange={(v) => props.setLayer(v as HierKey)}
-          />
-          <ToggleGroup
-            label="Method"
-            value={props.method}
-            options={[
-              { label: "DBSCAN", value: "dbscan" },
-              { label: "K-Means", value: "kmeans" },
-            ]}
-            onChange={(v) => props.setMethod(v as ClusterMethod)}
-          />
-        </div>
-
-        <div class="controls-grid">
-          <Show when={props.method === "dbscan"}>
-            <div class="slider-block">
-              <div class="slider-label">
-                <span class="slider-title">
-                  <span>ε (eps)</span>
-                  <span class="info" title="Neighborhood radius for DBSCAN; larger ε merges nearby groups.">i</span>
-                </span>
-                <span class="value">{props.eps.toFixed(2)}</span>
-              </div>
-              <input
-                class="slider"
-                type="range"
-                min="0.05"
-                max="1"
-                step="0.01"
-                value={props.eps}
-                onInput={(e) => props.setEps(parseFloat(e.currentTarget.value))}
-              />
-            </div>
-
-            <div class="slider-block">
-              <div class="slider-label">
-                <span class="slider-title">
-                  <span>Min images</span>
-                  <span class="info" title="Minimum samples required to form a DBSCAN cluster.">i</span>
-                </span>
-                <span class="value">{props.minPts}</span>
-              </div>
-              <input
-                class="slider"
-                type="range"
-                min="2"
-                max="20"
-                step="1"
-                value={props.minPts}
-                onInput={(e) => props.setMinPts(parseInt(e.currentTarget.value))}
-              />
-            </div>
-          </Show>
-
-          <Show when={props.method === "kmeans"}>
-            <div class="slider-block">
-              <div class="slider-label">
-                <span class="slider-title">
-                  <span>k (clusters)</span>
-                  <span class="info" title="Number of clusters to partition the images into.">i</span>
-                </span>
-                <span class="value">{props.kMeansK}</span>
-              </div>
-              <input
-                class="slider"
-                type="range"
-                min="2"
-                max="24"
-                step="1"
-                value={props.kMeansK}
-                onInput={(e) => props.setKMeansK(parseInt(e.currentTarget.value) || 1)}
-              />
-            </div>
-          </Show>
-        </div>
-
-        <button
-          class={`run-button ${props.isClustering ? "waiting" : ""}`}
-          disabled={props.isClustering}
-          onClick={props.runCluster}
-        >
-          {props.isClustering ? "Running…" : props.hasRun ? "Re-run" : "Run"}
-        </button>
-        <div class="button-row">
-          <button class="ghost-button" onClick={props.arrangePanels}>
-            Arrange to fit
-          </button>
-          <button class="ghost-button" onClick={() => props.resetView()}>
-            Reset view
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-type ClusterPanelProps = {
-  label: number;
-  count: number;
-  items: number[];
-  imageForIndex: (i: number) => string;
-  state: Accessor<PanelPlacement | undefined>;
-  fallback: PanelPlacement;
-  bringToFront: () => void;
-  onUpdate: (patch: Partial<PanelPlacement>) => void;
-  distribution: { name: string; pct: number; color: string }[];
-  order: number;
-  zoom: Accessor<number>;
-};
-
-function ClusterPanel(props: ClusterPanelProps) {
-  let panelRef: HTMLDivElement | undefined;
-  let gridRef: HTMLDivElement | undefined;
-  let bodyRef: HTMLDivElement | undefined;
-  let grid: Muuri | undefined;
-  let resizeObserver: ResizeObserver | undefined;
-
-  const panelState = () => props.state() ?? props.fallback;
-
-  const titleFor = () => {
-    if (props.label < 0) return "Ungrouped";
-    return `Group ${props.label + 1}`;
-  };
-
-  const rebuildGrid = () => {
-    if (!gridRef) return;
-    grid?.destroy();
-    gridRef.classList.add("muuri-live");
-    grid = new Muuri(gridRef, {
-      dragEnabled: false,
-      layoutOnResize: false,
-      layoutDuration: 220,
-      layoutEasing: "ease-out",
-    });
-    grid.refreshItems();
-    grid.layout(true);
-  };
-
-  onMount(() => {
-    rebuildGrid();
-
-    resizeObserver = new ResizeObserver(() => {
-      requestAnimationFrame(() => {
-        grid?.refreshItems();
-        grid?.layout();
-      });
-    });
-    if (bodyRef) resizeObserver.observe(bodyRef);
-
-    if (panelRef) {
-      const interaction = interact(panelRef)
-        .draggable({
-          inertia: false,
-          allowFrom: ".panel-header",
-          ignoreFrom: ".panel-body",
-          listeners: {
-            start() {
-              document.body.classList.add("no-select");
-            },
-            move(ev) {
-              const cur = props.state();
-              if (!cur) return;
-              props.bringToFront();
-              const scale = props.zoom();
-              props.onUpdate({ x: cur.x + ev.dx / scale, y: cur.y + ev.dy / scale });
-            },
-            end() {
-              document.body.classList.remove("no-select");
-            },
-          },
-        })
-        .resizable({
-          edges: { left: false, right: true, bottom: true, top: false },
-          modifiers: [interact.modifiers!.restrictSize({ min: { width: 240, height: 220 } })],
-          listeners: {
-            start() {
-              document.body.classList.add("no-select");
-            },
-            move(ev) {
-              const cur = props.state();
-              if (!cur) return;
-              props.bringToFront();
-              const scale = props.zoom();
-              const nextW = Math.max(240, cur.width + (ev.deltaRect?.width ?? 0) / scale);
-              const nextH = Math.max(220, cur.height + (ev.deltaRect?.height ?? 0) / scale);
-              props.onUpdate({
-                x: cur.x + (ev.deltaRect?.left ?? 0) / scale,
-                y: cur.y + (ev.deltaRect?.top ?? 0) / scale,
-                width: nextW,
-                height: nextH,
-              });
-              grid?.refreshItems();
-              grid?.layout();
-            },
-            end() {
-              document.body.classList.remove("no-select");
-            },
-          },
-        });
-
-      onCleanup(() => interaction.unset());
-    }
-  });
-  createEffect(() => {
-    props.zoom(); // track zoom
-    requestAnimationFrame(() => {
-      grid?.refreshItems();
-      grid?.layout();
-    });
-  });
-
-  createEffect(() => {
-    props.items.length;
-    queueMicrotask(rebuildGrid);
-  });
-
-  onCleanup(() => {
-    resizeObserver?.disconnect();
-    grid?.destroy();
-  });
-
-  return (
-    <div
-      ref={panelRef}
-      class="panel-window cluster-panel"
-      style={styleFor(panelState())}
-      onMouseDown={() => props.bringToFront()}
-      onTouchStart={() => props.bringToFront()}
-    >
-      <div class="panel-header">
-        <div>
-          <div class="panel-title">{titleFor()}</div>
-          <div class="panel-subtitle">{props.count} items</div>
-          <ColorBar parts={props.distribution} />
-        </div>
-        <div class="chip">drag + resize</div>
-      </div>
-      <div ref={bodyRef} class="panel-body">
-        <div
-          ref={gridRef}
-          class="muuri-grid"
-          style={{
-            // cancel outer panzoom scaling for grid contents
-            transform: `scale(${1 / props.zoom()})`,
-            "transform-origin": "0 0",
-
-            // expand layout space so after inverse-scale it still fills panel
-            width: `${100 * props.zoom()}%`,
-          }}
-        >
-          <For each={props.items}>
-            {(idx) => (
-              <div class="item">
-                <div class="item-content">
-                  <img class="thumb" width={64} height={64} src={props.imageForIndex(idx)} loading="lazy" alt="" />
-                </div>
-              </div>
-            )}
-          </For>
-        </div>
-      </div>
-      <div class="resize-handle" />
-    </div>
-  );
-}
-
-function ColorBar(props: { parts: { name: string; pct: number; color: string }[] }) {
-  if (!props.parts || props.parts.length === 0) return null;
-  return (
-    <div class="color-bar" title={props.parts.map((p) => `${p.name}: ${(p.pct * 100).toFixed(1)}%`).join("  ·  ")}>
-      <For each={props.parts}>
-        {(p) => <div class="color-segment" style={{ width: `${p.pct * 100}%`, "background-color": p.color }} />}
-      </For>
-    </div>
-  );
-}
-
-function ZoomWidget(props: { zoom: Accessor<number>; zoomIn: () => void; zoomOut: () => void; reset: () => void }) {
-  return (
-    <div class="zoom-widget">
-      <button class="zoom-button" onClick={props.zoomOut}>
-        −
-      </button>
-      <div class="zoom-indicator">{Math.round(props.zoom() * 100)}%</div>
-      <button class="zoom-button" onClick={props.zoomIn}>
-        +
-      </button>
-      <button class="zoom-button" title="Reset view" onClick={props.reset}>
-        ⤾
-      </button>
-    </div>
-  );
-}
-
-function ToggleGroup<T extends string>(props: {
-  label: string;
-  value: T;
-  options: { label: string; value: T }[];
-  onChange: (v: T) => void;
-}) {
-  return (
-    <div class="toggle-row">
-      <span class="toggle-label">{props.label}</span>
-      <div class="pill-group">
-        <For each={props.options}>
-          {(opt) => (
-            <button class={`pill ${props.value === opt.value ? "active" : ""}`} onClick={() => props.onChange(opt.value)}>
-              {opt.label}
-            </button>
-          )}
-        </For>
-      </div>
     </div>
   );
 }
