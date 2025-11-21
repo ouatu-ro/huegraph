@@ -1,7 +1,5 @@
-import type { Accessor } from "solid-js";
-import { For, Show, createEffect, createSignal } from "solid-js";
-import interact from "interactjs";
-import type { ClusterMethod, HierKey, PanelPlacement } from "../types";
+import { For, Show } from "solid-js";
+import type { ClusterMethod, HierKey } from "../types";
 import {
   EPS_MAX,
   EPS_MIN,
@@ -15,12 +13,8 @@ import {
 } from "../appConfig";
 
 export type ControlPanelProps = {
-  state: Accessor<PanelPlacement>;
-  style: Record<string, string>;
-  bringToFront: () => void;
-  onUpdate: (patch: Partial<PanelPlacement>) => void;
-  zoom: Accessor<number>;
-  setZoom: (z: number) => void;
+  className?: string;
+  style?: Record<string, string>;
   resetView: () => void;
   arrangePanels: () => void;
   layer: HierKey;
@@ -38,39 +32,9 @@ export type ControlPanelProps = {
   runCluster: () => void;
   progress: { phase: string; done: number; total: number } | null;
   ready: boolean;
-  pinned: boolean;
-  togglePin: () => void;
 };
 
 export default function ControlPanel(props: ControlPanelProps) {
-  const [panelRef, setPanelRef] = createSignal<HTMLDivElement | undefined>();
-
-  createEffect(() => {
-    if (props.pinned) return;
-    const panel = panelRef();
-    if (!panel) return;
-    const drag = interact(panel).draggable({
-      inertia: false,
-      allowFrom: ".panel-header",
-      ignoreFrom: ".panel-body",
-      listeners: {
-        start() {
-          document.body.classList.add("no-select");
-        },
-        move(ev) {
-          props.bringToFront();
-          const cur = props.state();
-          const scale = props.zoom();
-          props.onUpdate({ x: cur.x + ev.dx / scale, y: cur.y + ev.dy / scale });
-        },
-        end() {
-          document.body.classList.remove("no-select");
-        },
-      },
-    });
-    return () => drag.unset();
-  });
-
   const statusText = () => {
     if (!props.ready) return "Loading…";
     if (props.isClustering) return "Clustering…";
@@ -80,25 +44,15 @@ export default function ControlPanel(props: ControlPanelProps) {
 
   return (
     <div
-      ref={setPanelRef}
-      class="panel-window control-panel"
+      class={`panel-window control-panel ${props.className ?? ""}`}
       style={props.style}
-      onMouseDown={() => props.bringToFront()}
-      onTouchStart={() => props.bringToFront()}
     >
       <div class="panel-header">
         <div>
           <div class="panel-title">Controls</div>
-          <div class="panel-subtitle">drag the bar to move</div>
+          <div class="panel-subtitle">Cluster tuning</div>
         </div>
         <div class="panel-header-actions">
-          <button
-            class={`pin-button ${props.pinned ? "active" : ""}`}
-            onClick={props.togglePin}
-            aria-pressed={props.pinned}
-          >
-            {props.pinned ? "Pinned" : "Pin"}
-          </button>
           <div class="chip muted">{statusText()}</div>
         </div>
       </div>

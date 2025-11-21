@@ -1,14 +1,15 @@
-export const CONTROL_PANEL_ID = "control-panel";
 export const WORKSPACE_WIDTH = 9000;
 export const WORKSPACE_HEIGHT = 6000;
-export const CONTROL_PANEL_INITIAL_X = WORKSPACE_WIDTH / 2 - 200;
-export const CONTROL_PANEL_INITIAL_Y = WORKSPACE_HEIGHT / 2 - 220;
 export const HUD_MARGIN_TOP = 64;
 export const HUD_MARGIN_RIGHT = 16;
 export const CONTROL_PANEL_WIDTH = 360;
 export const CONTROL_PANEL_HEIGHT = 310;
-export const CONTROL_PANEL_Z_INDEX = 100;
-export const CONTROL_PANEL_PINNED_DEFAULT = true;
+export const CONTROL_DRAWER_WIDTH = CONTROL_PANEL_WIDTH;
+export const CONTROL_DRAWER_DEFAULT_OPEN = true;
+export const CONTROL_DRAWER_HANDLE_WIDTH = 58;
+export const CONTROL_DRAWER_HANDLE_HEIGHT = 120;
+export const CONTROL_DRAWER_HANDLE_ANGLE = 14;
+export const CONTROL_DRAWER_Z_INDEX = 1200;
 export const HUD_LAYER_Z_INDEX = 1200;
 
 export const DEFAULT_PANEL_WIDTH = 360;

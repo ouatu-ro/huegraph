@@ -2,6 +2,7 @@ import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount }
 import { createZoomPan } from "./useZoomPan";
 import ClusterWorker from "./workers/clusterWorker?worker";
 import ControlPanel from "./components/ControlPanel";
+import SideDrawer from "./components/SideDrawer";
 import ClusterPanel from "./components/ClusterPanel";
 import PhotoWindow from "./components/PhotoWindow";
 import ZoomWidget from "./components/ZoomWidget";
@@ -15,13 +16,12 @@ import type {
   PanelPlacementMap,
 } from "./types";
 import {
-  CONTROL_PANEL_HEIGHT,
-  CONTROL_PANEL_ID,
-  CONTROL_PANEL_INITIAL_X,
-  CONTROL_PANEL_INITIAL_Y,
-  CONTROL_PANEL_PINNED_DEFAULT,
-  CONTROL_PANEL_WIDTH,
-  CONTROL_PANEL_Z_INDEX,
+  CONTROL_DRAWER_DEFAULT_OPEN,
+  CONTROL_DRAWER_HANDLE_ANGLE,
+  CONTROL_DRAWER_HANDLE_HEIGHT,
+  CONTROL_DRAWER_HANDLE_WIDTH,
+  CONTROL_DRAWER_WIDTH,
+  CONTROL_DRAWER_Z_INDEX,
   CLUSTER_FOCUS_PAD,
   CLUSTER_LAYOUT_GAP_X,
   CLUSTER_LAYOUT_GAP_Y,
@@ -101,15 +101,6 @@ export default function App() {
   });
   const [initialArrangeDone, setInitialArrangeDone] = createSignal(false);
   const [maximizedPanels, setMaximizedPanels] = createSignal<Record<string, PanelPlacement>>({});
-  const [controlPanel, setControlPanel] = createSignal<PanelPlacement>({
-    id: CONTROL_PANEL_ID,
-    x: CONTROL_PANEL_INITIAL_X,
-    y: CONTROL_PANEL_INITIAL_Y,
-    width: CONTROL_PANEL_WIDTH,
-    height: CONTROL_PANEL_HEIGHT,
-    zIndex: CONTROL_PANEL_Z_INDEX,
-  });
-  const [controlPanelPinned, setControlPanelPinned] = createSignal(CONTROL_PANEL_PINNED_DEFAULT);
   const [zTop, setZTop] = createSignal(PANEL_ZTOP_START);
   const [clusterDists, setClusterDists] = createSignal<ClusterDistributionMap>({});
   const zoomPan = createZoomPan({
@@ -118,29 +109,18 @@ export default function App() {
     minZoom: ZOOM_MIN,
     maxZoom: ZOOM_MAX,
   });
-  const resetView = () => zoomPan.resetView(controlPanel());
+  const resetView = () => zoomPan.resetView();
 
-  const pinnedControlStyle = createMemo(() => ({
-    position: "absolute",
+  const controlDrawerStyle = createMemo(() => ({
     top: `${HUD_MARGIN_TOP}px`,
     right: `${HUD_MARGIN_RIGHT}px`,
-    width: `${controlPanel().width}px`,
-    height: `${controlPanel().height}px`,
-    "z-index": `${controlPanel().zIndex}`,
-    "pointer-events": "auto",
+    "z-index": `${CONTROL_DRAWER_Z_INDEX}`,
   }));
-
-  const floatingControlStyle = createMemo(() => ({
-    ...styleFor(controlPanel()),
-    position: "absolute",
-  }));
-
-  const toggleControlPanelPin = () => setControlPanelPinned((prev) => !prev);
 
   const worker = new ClusterWorker();
 
   onMount(() => {
-    zoomPan.centerWorkspace(controlPanel());
+    zoomPan.centerWorkspace();
 
     worker.onmessage = (e: MessageEvent<any>) => {
       const m = e.data;
@@ -239,16 +219,14 @@ export default function App() {
     }
   });
 
-  const bumpZ = (id: string, isControl = false) => {
+  const bumpZ = (id: string) => {
     const next = zTop() + 1;
     setZTop(next);
-    if (isControl) setControlPanel((p) => ({ ...p, zIndex: next }));
-    else
-      setPanelStates((prev) => {
-        const curr = prev[id];
-        if (!curr) return prev;
-        return { ...prev, [id]: { ...curr, zIndex: next } };
-      });
+    setPanelStates((prev) => {
+      const curr = prev[id];
+      if (!curr) return prev;
+      return { ...prev, [id]: { ...curr, zIndex: next } };
+    });
   };
 
   const updatePanel = (id: string, patch: Partial<PanelPlacement>) =>
@@ -257,9 +235,6 @@ export default function App() {
       if (!curr) return prev;
       return { ...prev, [id]: { ...curr, ...patch } };
     });
-
-  const updateControlPanel = (patch: Partial<PanelPlacement>) =>
-    setControlPanel((prev) => ({ ...prev, ...patch }));
 
   const closePhotoPreview = () => {
     setPreviewImageIdx(null);
@@ -446,6 +421,42 @@ export default function App() {
         <div class="brand-subtitle">client-side color clustering</div>
       </div>
 
+      <Show when={ready()}>
+        <SideDrawer
+          width={CONTROL_DRAWER_WIDTH}
+          defaultOpen={CONTROL_DRAWER_DEFAULT_OPEN}
+          handleSize={{ width: CONTROL_DRAWER_HANDLE_WIDTH, height: CONTROL_DRAWER_HANDLE_HEIGHT }}
+          handleAngle={CONTROL_DRAWER_HANDLE_ANGLE}
+          classNames={{ root: "control-drawer" }}
+          style={controlDrawerStyle()}
+        >
+          <ControlPanel
+            className="control-drawer-panel"
+            style={{ position: "relative", width: "100%", height: "100%" }}
+            resetView={resetView}
+            arrangePanels={arrangePanels}
+            layer={layer()}
+            setLayer={setLayer}
+            method={method()}
+            setMethod={setMethod}
+            eps={eps()}
+            setEps={setEps}
+            minPts={minPts()}
+            setMinPts={setMinPts}
+            kMeansK={kMeansK()}
+            setKMeansK={setKMeansK}
+            isClustering={isClustering()}
+            hasRun={hasRun()}
+            runCluster={() => {
+              setHasRun(true);
+              runCluster();
+            }}
+            progress={progress()}
+            ready={ready()}
+          />
+        </SideDrawer>
+      </Show>
+
       <Show when={!ready()}>
         <div class="floating-hint">
           <div class="text-lg font-semibold">Loading samples</div>
@@ -459,46 +470,13 @@ export default function App() {
 
       <div
         class="workspace-canvas"
-        ref={zoomPan.canvasRef}
-        style={{ cursor: zoomPan.isPanning() ? "grabbing" : "grab" }}
-      >
-        <Show when={ready()}>
-          <Show when={!controlPanelPinned()}>
-            <ControlPanel
-              state={controlPanel}
-              style={floatingControlStyle()}
-              bringToFront={() => bumpZ(CONTROL_PANEL_ID, true)}
-              onUpdate={updateControlPanel}
-              zoom={zoomPan.zoom}
-              setZoom={zoomPan.setZoom}
-              resetView={resetView}
-              arrangePanels={arrangePanels}
-              layer={layer()}
-              setLayer={setLayer}
-              method={method()}
-              setMethod={setMethod}
-              eps={eps()}
-              setEps={setEps}
-              minPts={minPts()}
-              setMinPts={setMinPts}
-              kMeansK={kMeansK()}
-              setKMeansK={setKMeansK}
-              isClustering={isClustering()}
-              hasRun={hasRun()}
-              runCluster={() => {
-                setHasRun(true);
-                runCluster();
-              }}
-              progress={progress()}
-              ready={ready()}
-              pinned={controlPanelPinned()}
-              togglePin={toggleControlPanelPin}
-            />
-          </Show>
-
-          <Show when={clusters().length === 0}>
-            <div class="empty-hint">Run clustering to spawn draggable panels.</div>
-          </Show>
+      ref={zoomPan.canvasRef}
+      style={{ cursor: zoomPan.isPanning() ? "grabbing" : "grab" }}
+    >
+      <Show when={ready()}>
+        <Show when={clusters().length === 0}>
+          <div class="empty-hint">Run clustering to spawn draggable panels.</div>
+        </Show>
 
           <For each={clusters()}>
             {([lab, idxs], order) => {
@@ -542,40 +520,6 @@ export default function App() {
           <div class="status-chip">Clustering…</div>
         </Show>
       </div>
-      <Show when={ready() && controlPanelPinned()}>
-        <div class="hud-layer">
-          <ControlPanel
-            state={controlPanel}
-            style={pinnedControlStyle()}
-            bringToFront={() => bumpZ(CONTROL_PANEL_ID, true)}
-            onUpdate={updateControlPanel}
-            zoom={zoomPan.zoom}
-            setZoom={zoomPan.setZoom}
-            resetView={resetView}
-            arrangePanels={arrangePanels}
-            layer={layer()}
-            setLayer={setLayer}
-            method={method()}
-            setMethod={setMethod}
-            eps={eps()}
-            setEps={setEps}
-            minPts={minPts()}
-            setMinPts={setMinPts}
-            kMeansK={kMeansK()}
-            setKMeansK={setKMeansK}
-            isClustering={isClustering()}
-            hasRun={hasRun()}
-            runCluster={() => {
-              setHasRun(true);
-              runCluster();
-            }}
-            progress={progress()}
-            ready={ready()}
-            pinned={controlPanelPinned()}
-            togglePin={toggleControlPanelPin}
-          />
-        </div>
-      </Show>
       <ZoomWidget zoom={zoomPan.zoom} zoomIn={zoomPan.zoomIn} zoomOut={zoomPan.zoomOut} reset={resetView} />
       <Show when={previewPanel() && previewImageIdx() !== null}>
         <PhotoWindow
