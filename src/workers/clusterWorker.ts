@@ -48,13 +48,26 @@ type WorkerMsg =
 type WorkerOut =
   | { type: "PROGRESS"; phase: string; done: number; total: number }
   | { type: "READY"; nImages: number; imageUrls?: string[] }
-  | { type: "CLUSTERS"; labels: number[]; layer: HierKey; runId?: number };
+  | {
+      type: "CLUSTERS";
+      labels: number[];
+      layer: HierKey;
+      runId?: number;
+      colorFamilyDist?: ClusterDistribution[];
+    };
+
+type ClusterDistribution = {
+  id: number;
+  parts: { name: string; pct: number; color: string }[];
+};
 
 let images: ImageBitmap[] = [];
 let imageUrls: string[] = [];
 let tax: TaxEntry[] = [];
 let ordMaps: Record<HierKey, Map<string, number>> | null = null;
+let ordLists: Record<HierKey, string[]> | null = null;
 let distsCache: Record<HierKey, Float32Array[]> | null = null;
+let colorFamilyPalette: string[] | null = null;
 
 const LAYERS: readonly HierKey[] = ["xkcd_color", "design_color", "common_color", "color_family"];
 const WORKER_TAG = "[clusterWorker]";
@@ -146,21 +159,42 @@ function buildOrdMaps() {
   const common = new Map<string, number>();
   const fam = new Map<string, number>();
 
+  const xkcdList: string[] = [];
+  const designList: string[] = [];
+  const commonList: string[] = [];
+  const famList: string[] = [];
+
   let idx = 0;
   for (const e of tax) {
-    if (!xkcd.has(e.xkcd_color)) xkcd.set(e.xkcd_color, idx++);
+    if (!xkcd.has(e.xkcd_color)) {
+      xkcd.set(e.xkcd_color, idx);
+      xkcdList[idx] = e.xkcd_color;
+      idx++;
+    }
   }
   idx = 0;
   for (const e of tax) {
-    if (!design.has(e.design_color)) design.set(e.design_color, idx++);
+    if (!design.has(e.design_color)) {
+      design.set(e.design_color, idx);
+      designList[idx] = e.design_color;
+      idx++;
+    }
   }
   idx = 0;
   for (const e of tax) {
-    if (!common.has(e.common_color)) common.set(e.common_color, idx++);
+    if (!common.has(e.common_color)) {
+      common.set(e.common_color, idx);
+      commonList[idx] = e.common_color;
+      idx++;
+    }
   }
   idx = 0;
   for (const e of tax) {
-    if (!fam.has(e.color_family)) fam.set(e.color_family, idx++);
+    if (!fam.has(e.color_family)) {
+      fam.set(e.color_family, idx);
+      famList[idx] = e.color_family;
+      idx++;
+    }
   }
 
   ordMaps = {
@@ -169,6 +203,47 @@ function buildOrdMaps() {
     common_color: common,
     color_family: fam,
   };
+
+  ordLists = {
+    xkcd_color: xkcdList,
+    design_color: designList,
+    common_color: commonList,
+    color_family: famList,
+  };
+
+  colorFamilyPalette = buildColorFamilyPalette(fam);
+}
+
+function rgbToHex(rgb: [number, number, number]) {
+  return `#${rgb
+    .map((v) => {
+      const clamped = Math.max(0, Math.min(255, Math.round(v)));
+      return clamped.toString(16).padStart(2, "0");
+    })
+    .join("")}`;
+}
+
+function buildColorFamilyPalette(famMap: Map<string, number>) {
+  const accum = new Map<string, { sum: [number, number, number]; n: number }>();
+  for (const entry of tax) {
+    const key = entry.color_family;
+    const cur = accum.get(key) ?? { sum: [0, 0, 0], n: 0 };
+    cur.sum[0] += entry.rgb[0];
+    cur.sum[1] += entry.rgb[1];
+    cur.sum[2] += entry.rgb[2];
+    cur.n += 1;
+    accum.set(key, cur);
+  }
+
+  const palette: string[] = [];
+  for (const [name, idx] of famMap.entries()) {
+    const stats = accum.get(name);
+    const avg: [number, number, number] = stats
+      ? [stats.sum[0] / stats.n, stats.sum[1] / stats.n, stats.sum[2] / stats.n]
+      : [148, 163, 184];
+    palette[idx] = rgbToHex(avg);
+  }
+  return palette;
 }
 
 async function buildDistributions(kColors: number) {
@@ -392,10 +467,49 @@ self.onmessage = async (evt: MessageEvent<WorkerMsg>) => {
         cluster.forEach((idx) => (labels[idx] = ci));
       });
 
-      (self as any).postMessage({ type: "CLUSTERS", labels, layer, runId } satisfies WorkerOut);
+      const colorFamilyDist = summarizeColorFamilies(labels);
+
+      (self as any).postMessage({ type: "CLUSTERS", labels, layer, runId, colorFamilyDist } satisfies WorkerOut);
       logInfo("RUN_CLUSTER completed", { nClusters: clusters.length, method });
     } catch (error) {
       fail("cluster", error);
     }
   }
 };
+
+function summarizeColorFamilies(labels: number[]): ClusterDistribution[] | undefined {
+  if (!distsCache || !ordLists || !colorFamilyPalette) return undefined;
+  const famVecs = distsCache.color_family;
+  if (!famVecs.length) return undefined;
+  const nDims = famVecs[0].length;
+
+  const agg = new Map<number, Float32Array>();
+  const ensure = (id: number) => {
+    if (!agg.has(id)) agg.set(id, new Float32Array(nDims));
+    return agg.get(id)!;
+  };
+
+  labels.forEach((lab, i) => {
+    const vec = famVecs[i];
+    const target = ensure(lab);
+    for (let j = 0; j < nDims; j++) target[j] += vec[j];
+  });
+
+  const result: ClusterDistribution[] = [];
+  agg.forEach((vec, id) => {
+    const total = vec.reduce((s, v) => s + v, 0);
+    if (total <= 0) return;
+    const parts = Array.from(vec)
+      .map((v, idx) => ({ v, idx }))
+      .filter((p) => p.v > 0)
+      .sort((a, b) => b.v - a.v)
+      .map((p) => ({
+        name: ordLists!.color_family[p.idx] ?? `fam-${p.idx}`,
+        pct: p.v / total,
+        color: colorFamilyPalette![p.idx] ?? "#94a3b8",
+      }));
+    result.push({ id, parts });
+  });
+
+  return result;
+}
