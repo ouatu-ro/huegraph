@@ -1,6 +1,7 @@
 :root {
   height: 100%;
-  font-family: "Sora", "Inter", "SF Pro Display", -apple-system, system-ui, sans-serif;
+  font-family: "Sora", "Inter", "SF Pro Display", -apple-system, system-ui,
+    sans-serif;
   background: #0b1220;
   color: #0f172a;
 }
@@ -14,7 +15,11 @@
 body {
   margin: 0;
   height: 100%;
-  background: radial-gradient(circle at 30% 20%, rgba(59, 130, 246, 0.12), transparent 28%),
+  background: radial-gradient(
+      circle at 30% 20%,
+      rgba(59, 130, 246, 0.12),
+      transparent 28%
+    ),
     radial-gradient(circle at 70% 0%, rgba(45, 212, 191, 0.16), transparent 32%),
     linear-gradient(180deg, #0b1220, #0f172a 60%, #0b1220 100%);
   color: #0f172a;
@@ -43,9 +48,16 @@ body {
   position: absolute;
   inset: -18% 0 auto 0;
   height: 52%;
-  background:
-    radial-gradient(circle at 24% 18%, rgba(94, 234, 212, 0.14), transparent 32%),
-    radial-gradient(circle at 78% 12%, rgba(94, 234, 212, 0.12), transparent 32%),
+  background: radial-gradient(
+      circle at 24% 18%,
+      rgba(94, 234, 212, 0.14),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at 78% 12%,
+      rgba(94, 234, 212, 0.12),
+      transparent 32%
+    ),
     radial-gradient(circle at 54% 38%, rgba(79, 70, 229, 0.1), transparent 40%);
   pointer-events: none;
 }
@@ -58,11 +70,22 @@ body {
   padding: 28px;
   isolation: isolate;
   touch-action: none;
-  background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+  background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.03) 1px,
+      transparent 1px
+    ),
     linear-gradient(0deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.04), transparent 32%),
-    radial-gradient(circle at 80% 60%, rgba(59, 130, 246, 0.08), transparent 38%),
+    radial-gradient(
+      circle at 20% 20%,
+      rgba(255, 255, 255, 0.04),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at 80% 60%,
+      rgba(59, 130, 246, 0.08),
+      transparent 38%
+    ),
     transparent;
   background-size: 32px 32px, 32px 32px, 100% 100%, 100% 100%, cover;
 }
@@ -171,7 +194,11 @@ body {
   padding: 12px;
   overflow-y: auto;
   overflow-x: hidden;
-  background: linear-gradient(180deg, rgba(248, 250, 252, 0.9), rgba(255, 255, 255, 0.9));
+  background: linear-gradient(
+    180deg,
+    rgba(248, 250, 252, 0.9),
+    rgba(255, 255, 255, 0.9)
+  );
 }
 
 .cluster-panel .panel-body {

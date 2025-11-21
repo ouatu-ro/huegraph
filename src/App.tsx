@@ -38,12 +38,12 @@ const defaultPlacement = (id: string, order: number): PanelPlacement => {
 const styleFor = (panel?: PanelPlacement): Record<string, string> =>
   panel
     ? {
-        left: `${panel.x}px`,
-        top: `${panel.y}px`,
-        width: `${panel.width}px`,
-        height: `${panel.height}px`,
-        "z-index": `${panel.zIndex}`,
-      }
+      left: `${panel.x}px`,
+      top: `${panel.y}px`,
+      width: `${panel.width}px`,
+      height: `${panel.height}px`,
+      "z-index": `${panel.zIndex}`,
+    }
     : {};
 
 export default function App() {
@@ -195,24 +195,75 @@ export default function App() {
     setControlPanel((prev) => ({ ...prev, ...patch }));
 
   const thumbSrc = (i: number) => imageUrls()?.[i] ?? `/sample-images/${i + 1}.jpg`;
-
   const arrangePanels = () => {
     const entries = Object.entries(panelStates());
-    if (!entries.length) return;
-    const viewportW = window.innerWidth;
-    const scale = zoomPan.zoom();
-    const baseX = (-zoomPan.offset().x) / scale + 40;
-    const baseY = (-zoomPan.offset().y) / scale + 80;
-    const colW = 380;
-    const rowH = 320;
-    const perRow = Math.max(1, Math.floor((viewportW / scale - 120) / colW));
+    const n = entries.length;
+    if (!n) return;
+
+    const { x: panX, y: panY, scale } = zoomPan.getView();
+
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    // --- screen-space layout targets ---
+    const padL = 40;
+    const padR = 40;
+    const padT = 80;
+    const padB = 40;
+    const gapX = 18;
+    const gapY = 18;
+
+    const availW = Math.max(1, vw - padL - padR);
+    const availH = Math.max(1, vh - padT - padB);
+
+    // sqrt grid
+    const cols = Math.ceil(Math.sqrt(n));
+    const rows = Math.ceil(n / cols);
+
+    // panel size in SCREEN pixels (so they fill the view)
+    let panelScreenW = (availW - gapX * (cols - 1)) / cols;
+    let panelScreenH = (availH - gapY * (rows - 1)) / rows;
+
+    // clamp to something sane
+    const minScreenW = 240;
+    const minScreenH = 220;
+    const maxScreenW = 520;
+    const maxScreenH = 420;
+
+    panelScreenW = Math.max(minScreenW, Math.min(maxScreenW, panelScreenW));
+    panelScreenH = Math.max(minScreenH, Math.min(maxScreenH, panelScreenH));
+
+    const colScreenW = panelScreenW + gapX;
+    const rowScreenH = panelScreenH + gapY;
+
+    // --- convert to WORLD space correctly ---
+    // screen = world*scale + pan  => world = (screen - pan)/scale
+    const baseWorldX = (padL - panX) / scale;
+    const baseWorldY = (padT - panY) / scale;
+
+    const panelWorldW = panelScreenW / scale;
+    const panelWorldH = panelScreenH / scale;
+    const colWorldW = colScreenW / scale;
+    const rowWorldH = rowScreenH / scale;
+
+    console.log("[arrangePanels]", {
+      n, cols, rows, panX, panY, scale,
+      panelScreenW, panelScreenH,
+      baseWorldX, baseWorldY
+    });
 
     setPanelStates((prev) => {
       const next = { ...prev };
       entries.forEach(([id, panel], idx) => {
-        const col = idx % perRow;
-        const row = Math.floor(idx / perRow);
-        next[id] = { ...panel, x: baseX + col * colW, y: baseY + row * rowH };
+        const col = idx % cols;
+        const row = Math.floor(idx / cols);
+        next[id] = {
+          ...panel,
+          x: baseWorldX + col * colWorldW,
+          y: baseWorldY + row * rowWorldH,
+          width: panelWorldW,
+          height: panelWorldH,
+        };
       });
       return next;
     });
@@ -598,6 +649,13 @@ function ClusterPanel(props: ClusterPanelProps) {
       onCleanup(() => interaction.unset());
     }
   });
+  createEffect(() => {
+    props.zoom(); // track zoom
+    requestAnimationFrame(() => {
+      grid?.refreshItems();
+      grid?.layout();
+    });
+  });
 
   createEffect(() => {
     props.items.length;
@@ -626,7 +684,18 @@ function ClusterPanel(props: ClusterPanelProps) {
         <div class="chip">drag + resize</div>
       </div>
       <div ref={bodyRef} class="panel-body">
-        <div ref={gridRef} class="muuri-grid">
+        <div
+          ref={gridRef}
+          class="muuri-grid"
+          style={{
+            // cancel outer panzoom scaling for grid contents
+            transform: `scale(${1 / props.zoom()})`,
+            "transform-origin": "0 0",
+
+            // expand layout space so after inverse-scale it still fills panel
+            width: `${100 * props.zoom()}%`,
+          }}
+        >
           <For each={props.items}>
             {(idx) => (
               <div class="item">
