@@ -1,10 +1,16 @@
 import type { Accessor } from "solid-js";
-import { For, createEffect, onCleanup, onMount } from "solid-js";
+import { For, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
 import interact from "interactjs";
 import Muuri from "muuri";
-import ColorBar from "./ColorBar";
+import ClusterPieChart from "./ClusterPieChart";
 import type { PanelPlacement, ClusterColorPart } from "../types";
 import { styleFor } from "../utils/panelStyle";
+import {
+  CLUSTER_RESIZE_MIN_HEIGHT,
+  CLUSTER_RESIZE_MIN_WIDTH,
+  CLUSTER_THUMB_MARGIN,
+  CLUSTER_THUMB_SIZE,
+} from "../appConfig";
 
 export type ClusterPanelProps = {
   label: number;
@@ -18,6 +24,7 @@ export type ClusterPanelProps = {
   distribution: ClusterColorPart[];
   order: number;
   zoom: Accessor<number>;
+  onFocus: () => void;
 };
 
 export default function ClusterPanel(props: ClusterPanelProps) {
@@ -26,12 +33,21 @@ export default function ClusterPanel(props: ClusterPanelProps) {
   let bodyRef: HTMLDivElement | undefined;
   let grid: Muuri | undefined;
   let resizeObserver: ResizeObserver | undefined;
+  const [selectedAction, setSelectedAction] = createSignal("");
+  const [showChart, setShowChart] = createSignal(false);
 
   const panelState = () => props.state() ?? props.fallback;
 
   const titleFor = () => {
     if (props.label < 0) return "Ungrouped";
     return `Group ${props.label + 1}`;
+  };
+
+  const handleAction = (value: string) => {
+    if (!value) return;
+    setSelectedAction("");
+    if (value === "focus") props.onFocus();
+    if (value === "chart") setShowChart(true);
   };
 
   const rebuildGrid = () => {
@@ -83,7 +99,11 @@ export default function ClusterPanel(props: ClusterPanelProps) {
         })
         .resizable({
           edges: { left: false, right: true, bottom: true, top: false },
-          modifiers: [interact.modifiers!.restrictSize({ min: { width: 240, height: 220 } })],
+          modifiers: [
+            interact.modifiers!.restrictSize({
+              min: { width: CLUSTER_RESIZE_MIN_WIDTH, height: CLUSTER_RESIZE_MIN_HEIGHT },
+            }),
+          ],
           listeners: {
             start() {
               document.body.classList.add("no-select");
@@ -93,8 +113,8 @@ export default function ClusterPanel(props: ClusterPanelProps) {
               if (!cur) return;
               props.bringToFront();
               const scale = props.zoom();
-              const nextW = Math.max(240, cur.width + (ev.deltaRect?.width ?? 0) / scale);
-              const nextH = Math.max(220, cur.height + (ev.deltaRect?.height ?? 0) / scale);
+              const nextW = Math.max(CLUSTER_RESIZE_MIN_WIDTH, cur.width + (ev.deltaRect?.width ?? 0) / scale);
+              const nextH = Math.max(CLUSTER_RESIZE_MIN_HEIGHT, cur.height + (ev.deltaRect?.height ?? 0) / scale);
               props.onUpdate({
                 x: cur.x + (ev.deltaRect?.left ?? 0) / scale,
                 y: cur.y + (ev.deltaRect?.top ?? 0) / scale,
@@ -144,11 +164,23 @@ export default function ClusterPanel(props: ClusterPanelProps) {
         <div>
           <div class="panel-title">{titleFor()}</div>
           <div class="panel-subtitle">{props.count} items</div>
-          <ColorBar parts={props.distribution} />
         </div>
-        <div class="chip">drag + resize</div>
+        <div class="cluster-actions">
+          <select
+            class="cluster-action-select"
+            value={selectedAction()}
+            onChange={(e) => handleAction(e.currentTarget.value)}
+          >
+            <option value="">Actions…</option>
+            <option value="focus">Bring into view</option>
+            <option value="chart">Color families pie</option>
+          </select>
+        </div>
       </div>
       <div ref={bodyRef} class="panel-body">
+        <Show when={showChart()}>
+          <ClusterPieChart parts={props.distribution} onClose={() => setShowChart(false)} />
+        </Show>
         <div
           ref={gridRef}
           class="muuri-grid"
@@ -160,9 +192,23 @@ export default function ClusterPanel(props: ClusterPanelProps) {
         >
           <For each={props.items}>
             {(idx) => (
-              <div class="item">
+              <div
+                class="item"
+                style={{
+                  width: `${CLUSTER_THUMB_SIZE * props.zoom()}px`,
+                  height: `${CLUSTER_THUMB_SIZE * props.zoom()}px`,
+                  margin: `${CLUSTER_THUMB_MARGIN * props.zoom()}px`,
+                }}
+              >
                 <div class="item-content">
-                  <img class="thumb" width={64} height={64} src={props.imageForIndex(idx)} loading="lazy" alt="" />
+                  <img
+                    class="thumb"
+                    width={CLUSTER_THUMB_SIZE}
+                    height={CLUSTER_THUMB_SIZE}
+                    src={props.imageForIndex(idx)}
+                    loading="lazy"
+                    alt=""
+                  />
                 </div>
               </div>
             )}

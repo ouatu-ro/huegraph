@@ -64,8 +64,8 @@ body {
 
 .workspace-canvas {
   position: relative;
-  width: 6000px;
-  height: 4000px;
+  width: 9000px;
+  height: 6000px;
   overflow: hidden;
   padding: 28px;
   isolation: isolate;
@@ -88,6 +88,13 @@ body {
     ),
     transparent;
   background-size: 32px 32px, 32px 32px, 100% 100%, 100% 100%, cover;
+}
+
+.hud-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1200;
 }
 
 .brand-mark {
@@ -178,6 +185,12 @@ body {
   min-height: 44px;
 }
 
+.panel-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .panel-title {
   font-weight: 700;
   font-size: 13px;
@@ -218,6 +231,45 @@ body {
   background: #e2e8f0;
   color: #475569;
   border-color: #cbd5e1;
+}
+
+.cluster-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cluster-action-select {
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  font-size: 12px;
+  color: #0f172a;
+}
+
+.pin-button {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.pin-button.active {
+  border-color: #0f172a;
+  background: #0f172a;
+  color: #ffffff;
+}
+
+.pin-button:hover {
+  border-color: #0f172a;
+  background: #0f172a;
+  color: #ffffff;
 }
 
 .pill-row {
@@ -448,6 +500,13 @@ body {
   box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
 }
 
+.ghost-button.small {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  font-size: 11px;
+  box-shadow: none;
+}
+
 .ghost-button:hover {
   background: #f8fafc;
 }
@@ -483,4 +542,31 @@ body {
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.3);
   font-size: 12px;
   z-index: 500;
+}
+
+.chart-card {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+}
+
+.chart-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.chart-card-body {
+  display: grid;
+  place-items: center;
+}
+
+.muted-text {
+  color: #64748b;
+  font-size: 12px;
 }

@@ -1,4 +1,3 @@
-import type { Accessor } from "solid-js";
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import { createZoomPan } from "./useZoomPan";
 import ClusterWorker from "./workers/clusterWorker?worker";
@@ -14,20 +13,58 @@ import type {
   PanelPlacement,
   PanelPlacementMap,
 } from "./types";
+import {
+  CONTROL_PANEL_HEIGHT,
+  CONTROL_PANEL_ID,
+  CONTROL_PANEL_INITIAL_X,
+  CONTROL_PANEL_INITIAL_Y,
+  CONTROL_PANEL_PINNED_DEFAULT,
+  CONTROL_PANEL_WIDTH,
+  CONTROL_PANEL_Z_INDEX,
+  CLUSTER_FOCUS_PAD,
+  CLUSTER_LAYOUT_GAP_X,
+  CLUSTER_LAYOUT_GAP_Y,
+  CLUSTER_LAYOUT_PAD_BOTTOM,
+  CLUSTER_LAYOUT_PAD_LEFT,
+  CLUSTER_LAYOUT_PAD_RIGHT,
+  CLUSTER_LAYOUT_PAD_TOP,
+  DEFAULT_PANEL_HEIGHT,
+  DEFAULT_PANEL_WIDTH,
+  EPS_DEFAULT,
+  HUD_MARGIN_RIGHT,
+  HUD_MARGIN_TOP,
+  K_COLORS,
+  KMEANS_DEFAULT,
+  MIN_PTS_DEFAULT,
+  PANEL_BASE_Z_INDEX,
+  PANEL_GRID_BASE_X,
+  PANEL_GRID_BASE_Y,
+  PANEL_GRID_COLUMN_SPACING,
+  PANEL_GRID_COLUMNS,
+  PANEL_GRID_ROW_SPACING,
+  PANEL_ROW_EVEN_OFFSET,
+  PANEL_ZTOP_START,
+  WORKSPACE_HEIGHT,
+  WORKSPACE_WIDTH,
+  ZOOM_MAX,
+  ZOOM_MIN,
+  ARRANGE_PANEL_MAX_SCREEN_HEIGHT,
+  ARRANGE_PANEL_MAX_SCREEN_WIDTH,
+  ARRANGE_PANEL_MIN_SCREEN_HEIGHT,
+  ARRANGE_PANEL_MIN_SCREEN_WIDTH,
+} from "./appConfig";
 import "./App.css";
 
-const CONTROL_PANEL_ID = "control-panel";
-
 const defaultPlacement = (id: string, order: number): PanelPlacement => {
-  const col = order % 3;
-  const row = Math.floor(order / 3);
+  const col = order % PANEL_GRID_COLUMNS;
+  const row = Math.floor(order / PANEL_GRID_COLUMNS);
   return {
     id,
-    x: 420 + col * 380,
-    y: 160 + row * 320 + (order % 2) * 14,
-    width: 360,
-    height: 300,
-    zIndex: 10 + order,
+    x: PANEL_GRID_BASE_X + col * PANEL_GRID_COLUMN_SPACING,
+    y: PANEL_GRID_BASE_Y + row * PANEL_GRID_ROW_SPACING + (order % 2) * PANEL_ROW_EVEN_OFFSET,
+    width: DEFAULT_PANEL_WIDTH,
+    height: DEFAULT_PANEL_HEIGHT,
+    zIndex: PANEL_BASE_Z_INDEX + order,
   };
 };
 
@@ -39,25 +76,49 @@ export default function App() {
   const [isClustering, setIsClustering] = createSignal(false);
   const [layer, setLayer] = createSignal<HierKey>("xkcd_color");
   const [method, setMethod] = createSignal<ClusterMethod>("dbscan");
-  const [eps, setEps] = createSignal(0.35);
-  const [minPts, setMinPts] = createSignal(3);
-  const [kMeansK, setKMeansK] = createSignal(8);
+  const [eps, setEps] = createSignal(EPS_DEFAULT);
+  const [minPts, setMinPts] = createSignal(MIN_PTS_DEFAULT);
+  const [kMeansK, setKMeansK] = createSignal(KMEANS_DEFAULT);
   const [hasRun, setHasRun] = createSignal(false);
   const [runId, setRunId] = createSignal(0);
 
   const [panelStates, setPanelStates] = createSignal<PanelPlacementMap>({});
+  const [initialArrangeDone, setInitialArrangeDone] = createSignal(false);
   const [controlPanel, setControlPanel] = createSignal<PanelPlacement>({
     id: CONTROL_PANEL_ID,
-    x: 24,
-    y: 24,
-    width: 360,
-    height: 310,
-    zIndex: 100,
+    x: CONTROL_PANEL_INITIAL_X,
+    y: CONTROL_PANEL_INITIAL_Y,
+    width: CONTROL_PANEL_WIDTH,
+    height: CONTROL_PANEL_HEIGHT,
+    zIndex: CONTROL_PANEL_Z_INDEX,
   });
-  const [zTop, setZTop] = createSignal(120);
+  const [controlPanelPinned, setControlPanelPinned] = createSignal(CONTROL_PANEL_PINNED_DEFAULT);
+  const [zTop, setZTop] = createSignal(PANEL_ZTOP_START);
   const [clusterDists, setClusterDists] = createSignal<ClusterDistributionMap>({});
-  const zoomPan = createZoomPan({ width: 6000, height: 4000, minZoom: 0.5, maxZoom: 2.5 });
+  const zoomPan = createZoomPan({
+    width: WORKSPACE_WIDTH,
+    height: WORKSPACE_HEIGHT,
+    minZoom: ZOOM_MIN,
+    maxZoom: ZOOM_MAX,
+  });
   const resetView = () => zoomPan.resetView(controlPanel());
+
+  const pinnedControlStyle = createMemo(() => ({
+    position: "absolute",
+    top: `${HUD_MARGIN_TOP}px`,
+    right: `${HUD_MARGIN_RIGHT}px`,
+    width: `${controlPanel().width}px`,
+    height: `${controlPanel().height}px`,
+    "z-index": `${controlPanel().zIndex}`,
+    "pointer-events": "auto",
+  }));
+
+  const floatingControlStyle = createMemo(() => ({
+    ...styleFor(controlPanel()),
+    position: "absolute",
+  }));
+
+  const toggleControlPanelPin = () => setControlPanelPinned((prev) => !prev);
 
   const worker = new ClusterWorker();
 
@@ -86,7 +147,7 @@ export default function App() {
       }
     };
 
-    worker.postMessage({ type: "INIT", kColors: 6 });
+    worker.postMessage({ type: "INIT", kColors: K_COLORS });
   });
 
   onCleanup(() => worker.terminate());
@@ -153,6 +214,10 @@ export default function App() {
       return next;
     });
     if (touched) setZTop(highest);
+    if (touched && !initialArrangeDone()) {
+      setInitialArrangeDone(true);
+      queueMicrotask(() => arrangePanels());
+    }
   });
 
   const bumpZ = (id: string, isControl = false) => {
@@ -177,6 +242,12 @@ export default function App() {
   const updateControlPanel = (patch: Partial<PanelPlacement>) =>
     setControlPanel((prev) => ({ ...prev, ...patch }));
 
+  const focusClusterPanel = (id: string, fallback: PanelPlacement) => {
+    bumpZ(id);
+    const panel = panelStates()[id] ?? fallback;
+    zoomPan.focusRect(panel, CLUSTER_FOCUS_PAD);
+  };
+
   const thumbSrc = (i: number) => imageUrls()?.[i] ?? `/sample-images/${i + 1}.jpg`;
   const arrangePanels = () => {
     const entries = Object.entries(panelStates());
@@ -189,12 +260,12 @@ export default function App() {
     const vh = window.innerHeight;
 
     // --- screen-space layout targets ---
-    const padL = 40;
-    const padR = 40;
-    const padT = 80;
-    const padB = 40;
-    const gapX = 18;
-    const gapY = 18;
+    const padL = CLUSTER_LAYOUT_PAD_LEFT;
+    const padR = CLUSTER_LAYOUT_PAD_RIGHT;
+    const padT = CLUSTER_LAYOUT_PAD_TOP;
+    const padB = CLUSTER_LAYOUT_PAD_BOTTOM;
+    const gapX = CLUSTER_LAYOUT_GAP_X;
+    const gapY = CLUSTER_LAYOUT_GAP_Y;
 
     const availW = Math.max(1, vw - padL - padR);
     const availH = Math.max(1, vh - padT - padB);
@@ -208,10 +279,10 @@ export default function App() {
     let panelScreenH = (availH - gapY * (rows - 1)) / rows;
 
     // clamp to something sane
-    const minScreenW = 240;
-    const minScreenH = 220;
-    const maxScreenW = 520;
-    const maxScreenH = 420;
+    const minScreenW = ARRANGE_PANEL_MIN_SCREEN_WIDTH;
+    const minScreenH = ARRANGE_PANEL_MIN_SCREEN_HEIGHT;
+    const maxScreenW = ARRANGE_PANEL_MAX_SCREEN_WIDTH;
+    const maxScreenH = ARRANGE_PANEL_MAX_SCREEN_HEIGHT;
 
     panelScreenW = Math.max(minScreenW, Math.min(maxScreenW, panelScreenW));
     panelScreenH = Math.max(minScreenH, Math.min(maxScreenH, panelScreenH));
@@ -283,9 +354,76 @@ export default function App() {
         style={{ cursor: zoomPan.isPanning() ? "grabbing" : "grab" }}
       >
         <Show when={ready()}>
+          <Show when={!controlPanelPinned()}>
+            <ControlPanel
+              state={controlPanel}
+              style={floatingControlStyle()}
+              bringToFront={() => bumpZ(CONTROL_PANEL_ID, true)}
+              onUpdate={updateControlPanel}
+              zoom={zoomPan.zoom}
+              setZoom={zoomPan.setZoom}
+              resetView={resetView}
+              arrangePanels={arrangePanels}
+              layer={layer()}
+              setLayer={setLayer}
+              method={method()}
+              setMethod={setMethod}
+              eps={eps()}
+              setEps={setEps}
+              minPts={minPts()}
+              setMinPts={setMinPts}
+              kMeansK={kMeansK()}
+              setKMeansK={setKMeansK}
+              isClustering={isClustering()}
+              hasRun={hasRun()}
+              runCluster={() => {
+                setHasRun(true);
+                runCluster();
+              }}
+              progress={progress()}
+              ready={ready()}
+              pinned={controlPanelPinned()}
+              togglePin={toggleControlPanelPin}
+            />
+          </Show>
+
+          <Show when={clusters().length === 0}>
+            <div class="empty-hint">Run clustering to spawn draggable panels.</div>
+          </Show>
+
+          <For each={clusters()}>
+            {([lab, idxs], order) => {
+              const key = String(lab);
+              const fallback = defaultPlacement(key, order());
+              return (
+                <ClusterPanel
+                  label={lab}
+                  count={idxs.length}
+                  fallback={fallback}
+                  items={idxs}
+                  state={() => panelStates()[key]}
+                  bringToFront={() => bumpZ(key)}
+                  onUpdate={(patch) => updatePanel(key, patch)}
+                  imageForIndex={thumbSrc}
+                  distribution={clusterDists()[key] ?? []}
+                  order={order()}
+                  zoom={zoomPan.zoom}
+                  onFocus={() => focusClusterPanel(key, fallback)}
+                />
+              );
+            }}
+          </For>
+        </Show>
+
+        <Show when={isClustering()}>
+          <div class="status-chip">Clustering…</div>
+        </Show>
+      </div>
+      <Show when={ready() && controlPanelPinned()}>
+        <div class="hud-layer">
           <ControlPanel
             state={controlPanel}
-            style={styleFor(controlPanel())}
+            style={pinnedControlStyle()}
             bringToFront={() => bumpZ(CONTROL_PANEL_ID, true)}
             onUpdate={updateControlPanel}
             zoom={zoomPan.zoom}
@@ -310,39 +448,11 @@ export default function App() {
             }}
             progress={progress()}
             ready={ready()}
+            pinned={controlPanelPinned()}
+            togglePin={toggleControlPanelPin}
           />
-
-          <Show when={clusters().length === 0}>
-            <div class="empty-hint">Run clustering to spawn draggable panels.</div>
-          </Show>
-
-          <For each={clusters()}>
-            {([lab, idxs], order) => {
-              const key = String(lab);
-              const fallback = defaultPlacement(key, order());
-              return (
-                <ClusterPanel
-                  label={lab}
-                  count={idxs.length}
-                  fallback={fallback}
-                  items={idxs}
-                  state={() => panelStates()[key]}
-                  bringToFront={() => bumpZ(key)}
-                  onUpdate={(patch) => updatePanel(key, patch)}
-                  imageForIndex={thumbSrc}
-                  distribution={clusterDists()[key] ?? []}
-                  order={order()}
-                  zoom={zoomPan.zoom}
-                />
-              );
-            }}
-          </For>
-        </Show>
-
-        <Show when={isClustering()}>
-          <div class="status-chip">Clustering…</div>
-        </Show>
-      </div>
+        </div>
+      </Show>
       <ZoomWidget zoom={zoomPan.zoom} zoomIn={zoomPan.zoomIn} zoomOut={zoomPan.zoomOut} reset={resetView} />
     </div>
   );

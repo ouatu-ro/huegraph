@@ -146,6 +146,28 @@ export function createZoomPan(opts: ZoomPanOptions) {
     centerWorkspace(controlPanel ?? lastControlPanel ?? undefined);
   };
 
+  const focusRect = (rect: Rect, pad = 40) => {
+    if (!panzoom) return;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const availableW = Math.max(1, vw - pad * 2);
+    const availableH = Math.max(1, vh - pad * 2);
+    const fitScale = Math.min(
+      maxScale,
+      Math.max(
+        minScale,
+        Math.min(availableW / rect.width, availableH / rect.height)
+      )
+    );
+    panzoom.zoom(fitScale, { animate: false, force: true });
+    const centerX = rect.x + rect.width / 2;
+    const centerY = rect.y + rect.height / 2;
+    const panX = vw / 2 - centerX * fitScale;
+    const panY = vh / 2 - centerY * fitScale;
+    panzoom.pan(panX, panY, { animate: false, force: true });
+    syncStateRaf({ x: panX, y: panY, scale: fitScale });
+  };
+
   // ------------------------------------------------------------
   // Zoom controls
   // ------------------------------------------------------------
@@ -302,6 +324,7 @@ export function createZoomPan(opts: ZoomPanOptions) {
     resetView, // (controlPanel?: Rect) => void
     centerWorkspace, // (controlPanel?: Rect) => void
     ensureControlPanelVisible, // (rect?: Rect) => void
+    focusRect, // (rect: Rect, pad?: number) => void
 
     getView, // () => { x, y, scale }
     screenToWorld, // (Point) => Point

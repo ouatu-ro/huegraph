@@ -1,7 +1,18 @@
 import type { Accessor } from "solid-js";
-import { For, Show, onCleanup, onMount } from "solid-js";
+import { For, Show, createEffect, createSignal } from "solid-js";
 import interact from "interactjs";
 import type { ClusterMethod, HierKey, PanelPlacement } from "../types";
+import {
+  EPS_MAX,
+  EPS_MIN,
+  EPS_STEP,
+  KMEANS_MAX,
+  KMEANS_MIN,
+  KMEANS_STEP,
+  MIN_PTS_MAX,
+  MIN_PTS_MIN,
+  MIN_PTS_STEP,
+} from "../appConfig";
 
 export type ControlPanelProps = {
   state: Accessor<PanelPlacement>;
@@ -27,14 +38,18 @@ export type ControlPanelProps = {
   runCluster: () => void;
   progress: { phase: string; done: number; total: number } | null;
   ready: boolean;
+  pinned: boolean;
+  togglePin: () => void;
 };
 
 export default function ControlPanel(props: ControlPanelProps) {
-  let panelRef: HTMLDivElement | undefined;
+  const [panelRef, setPanelRef] = createSignal<HTMLDivElement | undefined>();
 
-  onMount(() => {
-    if (!panelRef) return;
-    const drag = interact(panelRef).draggable({
+  createEffect(() => {
+    if (props.pinned) return;
+    const panel = panelRef();
+    if (!panel) return;
+    const drag = interact(panel).draggable({
       inertia: false,
       allowFrom: ".panel-header",
       ignoreFrom: ".panel-body",
@@ -53,7 +68,7 @@ export default function ControlPanel(props: ControlPanelProps) {
         },
       },
     });
-    onCleanup(() => drag.unset());
+    return () => drag.unset();
   });
 
   const statusText = () => {
@@ -65,7 +80,7 @@ export default function ControlPanel(props: ControlPanelProps) {
 
   return (
     <div
-      ref={panelRef}
+      ref={setPanelRef}
       class="panel-window control-panel"
       style={props.style}
       onMouseDown={() => props.bringToFront()}
@@ -76,7 +91,16 @@ export default function ControlPanel(props: ControlPanelProps) {
           <div class="panel-title">Controls</div>
           <div class="panel-subtitle">drag the bar to move</div>
         </div>
-        <div class="chip muted">{statusText()}</div>
+        <div class="panel-header-actions">
+          <button
+            class={`pin-button ${props.pinned ? "active" : ""}`}
+            onClick={props.togglePin}
+            aria-pressed={props.pinned}
+          >
+            {props.pinned ? "Pinned" : "Pin"}
+          </button>
+          <div class="chip muted">{statusText()}</div>
+        </div>
       </div>
       <div class="panel-body">
         <div class="pill-row">
@@ -115,9 +139,9 @@ export default function ControlPanel(props: ControlPanelProps) {
               <input
                 class="slider"
                 type="range"
-                min="0.05"
-                max="1"
-                step="0.01"
+                min={EPS_MIN}
+                max={EPS_MAX}
+                step={EPS_STEP}
                 value={props.eps}
                 onInput={(e) => props.setEps(parseFloat(e.currentTarget.value))}
               />
@@ -134,9 +158,9 @@ export default function ControlPanel(props: ControlPanelProps) {
               <input
                 class="slider"
                 type="range"
-                min="2"
-                max="20"
-                step="1"
+                min={MIN_PTS_MIN}
+                max={MIN_PTS_MAX}
+                step={MIN_PTS_STEP}
                 value={props.minPts}
                 onInput={(e) => props.setMinPts(parseInt(e.currentTarget.value))}
               />
@@ -155,9 +179,9 @@ export default function ControlPanel(props: ControlPanelProps) {
               <input
                 class="slider"
                 type="range"
-                min="2"
-                max="24"
-                step="1"
+                min={KMEANS_MIN}
+                max={KMEANS_MAX}
+                step={KMEANS_STEP}
                 value={props.kMeansK}
                 onInput={(e) => props.setKMeansK(parseInt(e.currentTarget.value) || 1)}
               />
