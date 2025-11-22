@@ -102,7 +102,6 @@ export default function App() {
     height: PHOTO_WINDOW_DEFAULT_HEIGHT,
   });
   const [maximizedPreview, setMaximizedPreview] = createSignal<PanelPlacement | null>(null);
-  const [initialArrangeDone, setInitialArrangeDone] = createSignal(false);
   const [maximizedPanels, setMaximizedPanels] = createSignal<Record<string, PanelPlacement>>({});
   const [zTop, setZTop] = createSignal(PANEL_ZTOP_START);
   const [clusterDists, setClusterDists] = createSignal<ClusterDistributionMap>({});
@@ -198,14 +197,28 @@ export default function App() {
 
   const chartPanelIds = createMemo(() => Object.keys(panelStates()).filter((id) => id.startsWith("chart-")));
 
-  // seed panel rectangles when new clusters appear
+  // seed panel rectangles when clusters change and drop stale panels
   createEffect(() => {
     const g = clusters();
-    if (!g.length) return;
     let highest = zTop();
     let touched = false;
+    const clusterIds = new Set(g.map(([lab]) => String(lab)));
     setPanelStates((prev) => {
       const next = { ...prev };
+      Object.keys(next).forEach((id) => {
+        if (id.startsWith("chart-")) {
+          const base = id.slice("chart-".length);
+          if (!clusterIds.has(base)) {
+            touched = true;
+            delete next[id];
+          }
+          return;
+        }
+        if (!clusterIds.has(id)) {
+          touched = true;
+          delete next[id];
+        }
+      });
       g.forEach(([lab], idx) => {
         const key = String(lab);
         if (!next[key]) {
@@ -218,10 +231,7 @@ export default function App() {
       return next;
     });
     if (touched) setZTop(highest);
-    if (touched && !initialArrangeDone()) {
-      setInitialArrangeDone(true);
-      queueMicrotask(() => arrangePanels());
-    }
+    if (touched) queueMicrotask(() => arrangePanels());
   });
 
   const bumpZ = (id: string) => {
