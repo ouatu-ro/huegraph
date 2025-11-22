@@ -1,10 +1,9 @@
 import type { Accessor } from "solid-js";
-import { For, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
+import { For, createEffect, onCleanup, onMount } from "solid-js";
 import Muuri from "muuri";
 import ActionMenu from "./ActionMenu";
-import PieChartWindow from "./PieChartWindow";
 import WindowBase from "./WindowBase";
-import type { PanelPlacement, ClusterColorPart } from "../types";
+import type { PanelPlacement } from "../types";
 import { CLUSTER_RESIZE_MIN_HEIGHT, CLUSTER_RESIZE_MIN_WIDTH, CLUSTER_THUMB_MARGIN, CLUSTER_THUMB_SIZE } from "../appConfig";
 
 export type ClusterPanelProps = {
@@ -16,12 +15,12 @@ export type ClusterPanelProps = {
   fallback: PanelPlacement;
   bringToFront: () => void;
   onUpdate: (patch: Partial<PanelPlacement>) => void;
-  distribution: ClusterColorPart[];
   order: number;
   zoom: Accessor<number>;
   onFocus: () => void;
   onMaximizeToggle: () => void;
   onPhotoPreview: (idx: number) => void;
+  onOpenChart: (clusterId: number, center: { x: number; y: number }) => void;
 };
 
 export default function ClusterPanel(props: ClusterPanelProps) {
@@ -29,9 +28,6 @@ export default function ClusterPanel(props: ClusterPanelProps) {
   let bodyRef: HTMLDivElement | undefined;
   let grid: Muuri | undefined;
   let resizeObserver: ResizeObserver | undefined;
-  const [chartPlacement, setChartPlacement] = createSignal<PanelPlacement | null>(null);
-  const [chartOpen, setChartOpen] = createSignal(false);
-  const [chartZ, setChartZ] = createSignal(0);
 
   const panelState = () => props.state() ?? props.fallback;
 
@@ -40,44 +36,15 @@ export default function ClusterPanel(props: ClusterPanelProps) {
     return `Group ${props.label + 1}`;
   };
 
-  const openChartWindow = () => {
-    const existing = chartPlacement();
-    if (existing) {
-      const baseZ = panelState()?.zIndex ?? 0;
-      const nextZ = Math.max(chartZ() + 1, baseZ + 1);
-      setChartZ(nextZ);
-      setChartPlacement({ ...existing, zIndex: nextZ });
-      setChartOpen(true);
-      return;
-    }
-    const base = panelState();
-    const width = 480;
-    const height = 380;
-    const centerX = (base?.x ?? 0) + (base?.width ?? width) / 2;
-    const centerY = (base?.y ?? 0) + (base?.height ?? height) / 2;
-    const nextZ = Math.max(chartZ() + 1, (base?.zIndex ?? 0) + 1);
-    setChartZ(nextZ);
-    setChartPlacement({
-      id: `chart-${props.label}`,
-      x: centerX - width / 2,
-      y: centerY - height / 2,
-      width,
-      height,
-      zIndex: nextZ,
-    });
-    setChartOpen(true);
-  };
-
-  const bringChartToFront = () => {
-    const baseZ = panelState()?.zIndex ?? 0;
-    const nextZ = Math.max(chartZ() + 1, baseZ + 1);
-    setChartZ(nextZ);
-    setChartPlacement((prev) => (prev ? { ...prev, zIndex: nextZ } : prev));
-  };
-
   const handleAction = (value: string) => {
     if (value === "focus") props.onFocus();
-    if (value === "chart") openChartWindow();
+    if (value === "chart") {
+      const panel = panelState();
+      props.onOpenChart(props.label, {
+        x: panel.x + panel.width / 2,
+        y: panel.y + panel.height / 2,
+      });
+    }
   };
 
   const rebuildGrid = () => {
@@ -190,18 +157,6 @@ export default function ClusterPanel(props: ClusterPanelProps) {
           </For>
         </div>
       </WindowBase>
-      <Show when={chartOpen() && chartPlacement()}>
-        <PieChartWindow
-          placement={chartPlacement()!}
-          data={props.distribution}
-          onClose={() => setChartOpen(false)}
-          onUpdate={(patch) =>
-            setChartPlacement((prev) => (prev ? { ...prev, ...patch } : prev))
-          }
-          bringToFront={bringChartToFront}
-          zoom={props.zoom}
-        />
-      </Show>
     </>
   );
 }

@@ -9,6 +9,7 @@ export type PhotoWindowProps = {
   onClose: () => void;
   imageSrc: string;
   zoom: Accessor<number>;
+  onMaximizeToggle?: () => void;
 };
 
 export default function PhotoWindow(props: PhotoWindowProps) {
@@ -23,6 +24,10 @@ export default function PhotoWindow(props: PhotoWindowProps) {
       subtitle="double click thumbnail to reopen"
       onClose={props.onClose}
       bodyClass="photo-window-body"
+      onHeaderDblClick={(e) => {
+        e.stopPropagation();
+        props.onMaximizeToggle?.();
+      }}
     >
       <img src={props.imageSrc} alt="" />
     </WindowBase>

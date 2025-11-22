@@ -4,6 +4,7 @@ import ClusterWorker from "./workers/clusterWorker?worker";
 import ControlPanel from "./components/ControlPanel";
 import SideDrawer from "./components/SideDrawer";
 import ClusterPanel from "./components/ClusterPanel";
+import PieChartWindow from "./components/PieChartWindow";
 import PhotoWindow from "./components/PhotoWindow";
 import ZoomWidget from "./components/ZoomWidget";
 import type {
@@ -63,6 +64,8 @@ import {
 import "./App.css";
 
 const assetUrl = (path: string) => new URL(path, import.meta.env.BASE_URL).toString();
+const CHART_WINDOW_WIDTH = 480;
+const CHART_WINDOW_HEIGHT = 380;
 
 const defaultPlacement = (id: string, order: number): PanelPlacement => {
   const col = order % PANEL_GRID_COLUMNS;
@@ -98,6 +101,7 @@ export default function App() {
     width: PHOTO_WINDOW_DEFAULT_WIDTH,
     height: PHOTO_WINDOW_DEFAULT_HEIGHT,
   });
+  const [maximizedPreview, setMaximizedPreview] = createSignal<PanelPlacement | null>(null);
   const [initialArrangeDone, setInitialArrangeDone] = createSignal(false);
   const [maximizedPanels, setMaximizedPanels] = createSignal<Record<string, PanelPlacement>>({});
   const [zTop, setZTop] = createSignal(PANEL_ZTOP_START);
@@ -192,6 +196,8 @@ export default function App() {
     });
   });
 
+  const chartPanelIds = createMemo(() => Object.keys(panelStates()).filter((id) => id.startsWith("chart-")));
+
   // seed panel rectangles when new clusters appear
   createEffect(() => {
     const g = clusters();
@@ -235,9 +241,25 @@ export default function App() {
       return { ...prev, [id]: { ...curr, ...patch } };
     });
 
+  const deletePanel = (id: string) => {
+    setPanelStates((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setMaximizedPanels((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  };
+
   const closePhotoPreview = () => {
     setPreviewImageIdx(null);
     setPreviewPanel(null);
+    setMaximizedPreview(null);
   };
 
   const updatePhotoPreview = (patch: Partial<PanelPlacement>) =>
@@ -255,6 +277,52 @@ export default function App() {
     setPreviewPanel((prev) => (prev ? { ...prev, zIndex: next } : prev));
   };
 
+  const togglePreviewMaximize = () => {
+    const current = previewPanel();
+    if (!current) return;
+    const previous = maximizedPreview();
+    if (previous) {
+      setPreviewPanel(previous);
+      setMaximizedPreview(null);
+      return;
+    }
+    if (typeof window === "undefined") return;
+    const padding = PANEL_MAXIMIZE_PADDING;
+    const topLeft = zoomPan.screenToWorld({ x: padding, y: padding });
+    const bottomRight = zoomPan.screenToWorld({
+      x: window.innerWidth - padding,
+      y: window.innerHeight - padding,
+    });
+    const availableWidth = Math.max(0, bottomRight.x - topLeft.x);
+    const availableHeight = Math.max(0, bottomRight.y - topLeft.y);
+    const width = Math.max(PANEL_MAXIMIZE_MIN_WIDTH, availableWidth);
+    const height = Math.max(PANEL_MAXIMIZE_MIN_HEIGHT, availableHeight);
+    const centerX = (topLeft.x + bottomRight.x) / 2;
+    const centerY = (topLeft.y + bottomRight.y) / 2;
+    const newX = centerX - width / 2;
+    const newY = centerY - height / 2;
+    setMaximizedPreview({ ...current });
+    setPreviewPanel({ ...current, x: newX, y: newY, width, height });
+  };
+
+  const openChartWindow = (clusterId: number, center: { x: number; y: number }) => {
+    const id = `chart-${clusterId}`;
+    const width = CHART_WINDOW_WIDTH;
+    const height = CHART_WINDOW_HEIGHT;
+    const x = center.x - width / 2;
+    const y = center.y - height / 2;
+    const nextZ = zTop() + 1;
+    setZTop(nextZ);
+    setPanelStates((prev) => {
+      const existing = prev[id];
+      if (existing) return { ...prev, [id]: { ...existing, zIndex: nextZ } };
+      return {
+        ...prev,
+        [id]: { id, x, y, width, height, zIndex: nextZ },
+      };
+    });
+  };
+
   const openPhotoPreview = (idx: number) => {
     const ratio = PHOTO_WINDOW_RATIO;
     const size = previewSizePx();
@@ -270,6 +338,7 @@ export default function App() {
     const next = zTop() + 1;
     setZTop(next);
     setPreviewImageIdx(idx);
+    setMaximizedPreview(null);
     setPreviewPanel({
       id: PHOTO_WINDOW_ID,
       x: topLeft.x,
@@ -491,13 +560,33 @@ export default function App() {
                   bringToFront={() => bumpZ(key)}
                   onUpdate={(patch) => updatePanel(key, patch)}
                   imageForIndex={thumbSrc}
-                  distribution={clusterDists()[key] ?? []}
                   order={order()}
                   zoom={zoomPan.zoom}
                   onFocus={() => focusClusterPanel(key, fallback)}
                   onMaximizeToggle={() => toggleMaximize(key)}
                   onPhotoPreview={openPhotoPreview}
+                  onOpenChart={openChartWindow}
                 />
+              );
+            }}
+          </For>
+
+          <For each={chartPanelIds()}>
+            {(id) => {
+              const placement = () => panelStates()[id];
+              const clusterKey = id.slice("chart-".length);
+              return (
+                <Show when={placement()}>
+                  <PieChartWindow
+                    placement={placement}
+                    data={clusterDists()[clusterKey] ?? []}
+                    onClose={() => deletePanel(id)}
+                    onUpdate={(patch) => updatePanel(id, patch)}
+                    bringToFront={() => bumpZ(id)}
+                    zoom={zoomPan.zoom}
+                    onMaximizeToggle={() => toggleMaximize(id)}
+                  />
+                </Show>
               );
             }}
           </For>
@@ -510,6 +599,7 @@ export default function App() {
               onClose={closePhotoPreview}
               imageSrc={previewImageIdx() !== null ? thumbSrc(previewImageIdx()!) : ""}
               zoom={zoomPan.zoom}
+              onMaximizeToggle={togglePreviewMaximize}
             />
           </Show>
         </Show>
@@ -527,6 +617,7 @@ export default function App() {
           onClose={closePhotoPreview}
           imageSrc={previewImageIdx() !== null ? thumbSrc(previewImageIdx()!) : ""}
           zoom={zoomPan.zoom}
+          onMaximizeToggle={togglePreviewMaximize}
         />
       </Show>
     </div>
