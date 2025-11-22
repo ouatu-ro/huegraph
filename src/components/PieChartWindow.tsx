@@ -37,6 +37,7 @@ export default function PieChartWindow(props: PieChartWindowProps) {
         ],
       },
       options: {
+        responsive: true,
         maintainAspectRatio: false,
         plugins: {
           legend: {

@@ -43,7 +43,8 @@ export default function ClusterPanel(props: ClusterPanelProps) {
   const openChartWindow = () => {
     const existing = chartPlacement();
     if (existing) {
-      const nextZ = Math.max(chartZ(), (existing.zIndex ?? 0) + 1);
+      const baseZ = panelState()?.zIndex ?? 0;
+      const nextZ = Math.max(chartZ() + 1, baseZ + 1);
       setChartZ(nextZ);
       setChartPlacement({ ...existing, zIndex: nextZ });
       setChartOpen(true);
@@ -54,7 +55,7 @@ export default function ClusterPanel(props: ClusterPanelProps) {
     const height = 380;
     const centerX = (base?.x ?? 0) + (base?.width ?? width) / 2;
     const centerY = (base?.y ?? 0) + (base?.height ?? height) / 2;
-    const nextZ = Math.max(chartZ(), (base?.zIndex ?? 0) + 1);
+    const nextZ = Math.max(chartZ() + 1, (base?.zIndex ?? 0) + 1);
     setChartZ(nextZ);
     setChartPlacement({
       id: `chart-${props.label}`,
@@ -68,7 +69,8 @@ export default function ClusterPanel(props: ClusterPanelProps) {
   };
 
   const bringChartToFront = () => {
-    const nextZ = chartZ() + 1;
+    const baseZ = panelState()?.zIndex ?? 0;
+    const nextZ = Math.max(chartZ() + 1, baseZ + 1);
     setChartZ(nextZ);
     setChartPlacement((prev) => (prev ? { ...prev, zIndex: nextZ } : prev));
   };

@@ -1,5 +1,5 @@
 import type { Accessor, JSX } from "solid-js";
-import { Show, createEffect, onCleanup, onMount } from "solid-js";
+import { createEffect, onCleanup, onMount } from "solid-js";
 import interact from "interactjs";
 import type { PanelPlacement } from "../types";
 import { styleFor } from "../utils/panelStyle";
@@ -28,8 +28,6 @@ export type WindowBaseProps = {
 };
 
 type PendingDelta = {
-  dx: number;
-  dy: number;
   dw: number;
   dh: number;
   dl: number;
@@ -39,8 +37,9 @@ type PendingDelta = {
 export default function WindowBase(props: WindowBaseProps) {
   let panelRef: HTMLDivElement | undefined;
   let rafId: number | null = null;
-  let pending: PendingDelta = { dx: 0, dy: 0, dw: 0, dh: 0, dl: 0, dt: 0 };
+  let pending: PendingDelta = { dw: 0, dh: 0, dl: 0, dt: 0 };
   let lastPlacement: PanelPlacement | undefined;
+  let interaction: ReturnType<typeof interact> | null = null;
 
   const minWidth = () => props.minWidth ?? CLUSTER_RESIZE_MIN_WIDTH;
   const minHeight = () => props.minHeight ?? CLUSTER_RESIZE_MIN_HEIGHT;
@@ -49,23 +48,23 @@ export default function WindowBase(props: WindowBaseProps) {
   createEffect(() => {
     const p = props.placement();
     if (p) lastPlacement = p;
-    pending = { dx: 0, dy: 0, dw: 0, dh: 0, dl: 0, dt: 0 };
+    pending = { dw: 0, dh: 0, dl: 0, dt: 0 };
   });
 
   const flush = () => {
     rafId = null;
     const base = lastPlacement ?? props.placement();
     if (!base) {
-      pending = { dx: 0, dy: 0, dw: 0, dh: 0, dl: 0, dt: 0 };
+      pending = { dw: 0, dh: 0, dl: 0, dt: 0 };
       return;
     }
     const next: Partial<PanelPlacement> = {
-      x: base.x + pending.dx + pending.dl,
-      y: base.y + pending.dy + pending.dt,
+      x: base.x + pending.dl,
+      y: base.y + pending.dt,
       width: base.width + pending.dw,
       height: base.height + pending.dh,
     };
-    pending = { dx: 0, dy: 0, dw: 0, dh: 0, dl: 0, dt: 0 };
+    pending = { dw: 0, dh: 0, dl: 0, dt: 0 };
     lastPlacement = { ...base, ...next };
     props.onUpdate(next);
   };
@@ -76,7 +75,7 @@ export default function WindowBase(props: WindowBaseProps) {
 
   onMount(() => {
     if (!panelRef) return;
-    const interaction = interact(panelRef)
+    interaction = interact(panelRef)
       .draggable({
         inertia: false,
         allowFrom: ".panel-header",
@@ -84,12 +83,16 @@ export default function WindowBase(props: WindowBaseProps) {
         listeners: {
           start() {
             document.body.classList.add("no-select");
+            props.bringToFront();
           },
           move(ev) {
             const scale = props.zoom();
-            pending.dx += ev.dx / scale;
-            pending.dy += ev.dy / scale;
-            enqueue();
+            const cur = props.placement();
+            if (!cur) return;
+            props.onUpdate({
+              x: cur.x + ev.dx / scale,
+              y: cur.y + ev.dy / scale,
+            });
           },
           end() {
             document.body.classList.remove("no-select");
@@ -124,50 +127,44 @@ export default function WindowBase(props: WindowBaseProps) {
             }
           : false
       );
-    onCleanup(() => interaction.unset());
   });
 
   onCleanup(() => {
     if (rafId !== null) cancelAnimationFrame(rafId);
+    interaction?.unset();
   });
 
   return (
-    <Show when={props.placement()}>
-      {(placement) => (
-        <div
-          ref={panelRef}
-          class={`panel-window ${props.class ?? ""}`}
-          style={styleFor(placement())}
-          onMouseDown={props.bringToFront}
-          onTouchStart={props.bringToFront}
-        >
-          <div class="panel-header" onDblClick={props.onHeaderDblClick}>
-            <div>
-              <div class="panel-title">{props.title}</div>
-              <div class="panel-subtitle">{props.subtitle}</div>
-            </div>
-            <div class="panel-header-actions">
-              {props.headerActions}
-              <Show when={props.onClose}>
-                <button class="close-button" onClick={props.onClose} aria-label="Close">
-                  ×
-                </button>
-              </Show>
-            </div>
-          </div>
-          <div
-            ref={(el) => {
-              props.bodyRef?.(el);
-            }}
-            class={`panel-body ${props.bodyClass ?? ""}`}
-          >
-            {props.children}
-          </div>
-          <Show when={allowResize()}>
-            <div class="resize-handle" />
-          </Show>
+    <div
+      ref={panelRef}
+      class={`panel-window ${props.class ?? ""}`}
+      style={props.placement() ? styleFor(props.placement()) : { display: "none" }}
+      onMouseDown={props.bringToFront}
+      onTouchStart={props.bringToFront}
+    >
+      <div class="panel-header" onDblClick={props.onHeaderDblClick}>
+        <div>
+          <div class="panel-title">{props.title}</div>
+          <div class="panel-subtitle">{props.subtitle}</div>
         </div>
-      )}
-    </Show>
+        <div class="panel-header-actions">
+          {props.headerActions}
+          {props.onClose ? (
+            <button class="close-button" onClick={props.onClose} aria-label="Close">
+              ×
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <div
+        ref={(el) => {
+          props.bodyRef?.(el);
+        }}
+        class={`panel-body ${props.bodyClass ?? ""}`}
+      >
+        {props.children}
+      </div>
+      {allowResize() ? <div class="resize-handle" /> : null}
+    </div>
   );
 }
