@@ -17,54 +17,44 @@ export type PieChartWindowProps = {
 export default function PieChartWindow(props: PieChartWindowProps) {
   let canvasRef: HTMLCanvasElement | undefined;
   let chart: Chart | undefined;
+  function syncCanvasSize(canvas: HTMLCanvasElement) {
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = Math.max(1, rect.width);
+    canvas.height = Math.max(1, rect.height);
+  }
 
-  const currentSize = () => {
-    const placement = props.placement();
-    return {
-      width: placement?.width ?? 320,
-      height: placement?.height ?? 240,
-    };
-  };
 
-  const ensureSize = () => {
+
+  createEffect(() => {
+    const data = props.data;
     if (!canvasRef) return;
-    const { width, height } = currentSize();
-    if (canvasRef.width !== width || canvasRef.height !== height) {
-      canvasRef.width = width;
-      canvasRef.height = height;
-      chart?.resize();
-    }
-  };
 
-  const ensureChart = () => {
-    if (!canvasRef) return;
-    ensureSize();
-    if (!props.data || props.data.length === 0) {
-      chart?.destroy();
-      chart = undefined;
-      return;
-    }
+    syncCanvasSize(canvasRef);
+
     if (!chart) {
       chart = new Chart(canvasRef, {
         type: "pie",
         data: {
-          labels: props.data.map((p) => p.name),
+          labels: data.map((p) => p.name),
           datasets: [
             {
-              data: props.data.map((p) => p.pct * 100),
-              backgroundColor: props.data.map((p) => p.color),
+              data: data.map((p) => p.pct * 100),
+              backgroundColor: data.map((p) => p.color),
               borderWidth: 1,
             },
           ],
         },
         options: {
-          responsive: false,
+          responsive: true,
           maintainAspectRatio: false,
           animation: false,
           plugins: {
             legend: {
               position: "right",
-              labels: { boxWidth: 14, color: "#0f172a" },
+              labels: {
+                boxWidth: 14,
+                color: "#0f172a",
+              },
             },
             tooltip: {
               callbacks: {
@@ -80,25 +70,15 @@ export default function PieChartWindow(props: PieChartWindowProps) {
       });
       return;
     }
-    chart.data.labels = props.data.map((p) => p.name);
+
+    chart.data.labels = data.map((p) => p.name);
     const dataset = chart.data.datasets[0];
-    dataset.data = props.data.map((p) => p.pct * 100);
-    dataset.backgroundColor = props.data.map((p) => p.color);
+    dataset.data = data.map((p) => p.pct * 100);
+    dataset.backgroundColor = data.map((p) => p.color);
     chart.update("none");
-  };
-
-  createEffect(ensureChart);
-
-  createEffect(() => {
-    const { width, height } = currentSize();
-    width;
-    height;
-    ensureSize();
   });
 
-  onCleanup(() => {
-    chart?.destroy();
-  });
+  onCleanup(() => chart?.destroy());
 
   return (
     <WindowBase
@@ -115,7 +95,7 @@ export default function PieChartWindow(props: PieChartWindowProps) {
         props.onMaximizeToggle();
       }}
     >
-      <div class="chart-card-body pie-window-chart">
+      <div class="pie-window-chart">
         <canvas ref={canvasRef} class="pie-window-canvas" />
       </div>
     </WindowBase>
