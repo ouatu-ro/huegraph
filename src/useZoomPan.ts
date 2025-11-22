@@ -174,14 +174,34 @@ export function createZoomPan(opts: ZoomPanOptions) {
 
   const zoomIn = () => {
     if (!panzoom) return;
-    panzoom.zoomIn({ animate: false });
-    syncStateRaf();
+    const { x: panX, y: panY, scale } = getView();
+    const factor = 1.2;
+    const targetScale = Math.min(maxScale, Math.max(minScale, scale * factor));
+    if (targetScale === scale) return;
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight / 2;
+    const world = { x: (cx - panX) / scale, y: (cy - panY) / scale };
+    panzoom.zoom(targetScale, { animate: false, force: true });
+    const nextX = cx - world.x * targetScale;
+    const nextY = cy - world.y * targetScale;
+    panzoom.pan(nextX, nextY, { animate: false, force: true });
+    syncStateRaf({ x: nextX, y: nextY, scale: targetScale });
   };
 
   const zoomOut = () => {
     if (!panzoom) return;
-    panzoom.zoomOut({ animate: false });
-    syncStateRaf();
+    const { x: panX, y: panY, scale } = getView();
+    const factor = 1 / 1.2;
+    const targetScale = Math.min(maxScale, Math.max(minScale, scale * factor));
+    if (targetScale === scale) return;
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight / 2;
+    const world = { x: (cx - panX) / scale, y: (cy - panY) / scale };
+    panzoom.zoom(targetScale, { animate: false, force: true });
+    const nextX = cx - world.x * targetScale;
+    const nextY = cy - world.y * targetScale;
+    panzoom.pan(nextX, nextY, { animate: false, force: true });
+    syncStateRaf({ x: nextX, y: nextY, scale: targetScale });
   };
 
   const setZoomLevel = (scale: number) => {

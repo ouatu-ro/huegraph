@@ -6,7 +6,6 @@ import SideDrawer from "./components/SideDrawer";
 import ClusterPanel from "./components/ClusterPanel";
 import PhotoWindow from "./components/PhotoWindow";
 import ZoomWidget from "./components/ZoomWidget";
-import { styleFor } from "./utils/panelStyle";
 import type {
   ClusterDistribution,
   ClusterDistributionMap,
@@ -505,8 +504,7 @@ export default function App() {
 
           <Show when={previewPanel() && previewImageIdx() !== null}>
             <PhotoWindow
-              state={() => previewPanel() ?? undefined}
-              style={styleFor(previewPanel() ?? undefined)}
+              placement={() => previewPanel() ?? undefined}
               bringToFront={bringPreviewToFront}
               onUpdate={updatePhotoPreview}
               onClose={closePhotoPreview}
@@ -523,8 +521,7 @@ export default function App() {
       <ZoomWidget zoom={zoomPan.zoom} zoomIn={zoomPan.zoomIn} zoomOut={zoomPan.zoomOut} reset={resetView} />
       <Show when={previewPanel() && previewImageIdx() !== null}>
         <PhotoWindow
-          state={() => previewPanel() ?? undefined}
-          style={styleFor(previewPanel() ?? undefined)}
+          placement={() => previewPanel() ?? undefined}
           bringToFront={bringPreviewToFront}
           onUpdate={updatePhotoPreview}
           onClose={closePhotoPreview}
