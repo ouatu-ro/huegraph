@@ -1,0 +1,125 @@
+.workspace-shell {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.workspace-shell::before {
+  content: "";
+  position: absolute;
+  inset: -18% 0 auto 0;
+  height: 52%;
+  background: radial-gradient(
+      circle at 24% 18%,
+      rgba(94, 234, 212, 0.14),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at 78% 12%,
+      rgba(94, 234, 212, 0.12),
+      transparent 32%
+    ),
+    radial-gradient(circle at 54% 38%, rgba(79, 70, 229, 0.1), transparent 40%);
+  pointer-events: none;
+}
+
+.workspace-canvas {
+  position: relative;
+  width: 9000px;
+  height: 6000px;
+  overflow: hidden;
+  padding: 28px;
+  isolation: isolate;
+  touch-action: none;
+  background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.03) 1px,
+      transparent 1px
+    ),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    radial-gradient(
+      circle at 20% 20%,
+      rgba(255, 255, 255, 0.04),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at 80% 60%,
+      rgba(59, 130, 246, 0.08),
+      transparent 38%
+    ),
+    transparent;
+  background-size: 32px 32px, 32px 32px, 100% 100%, 100% 100%, cover;
+}
+
+.hud-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1200;
+}
+
+.brand-mark {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  text-align: right;
+  z-index: 200;
+  pointer-events: none;
+  color: #e2e8f0;
+  text-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.brand-title {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.brand-subtitle {
+  font-size: 12px;
+  opacity: 0.88;
+}
+
+.floating-hint {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.88);
+  color: #e2e8f0;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+  min-width: 240px;
+  text-align: center;
+  z-index: 600;
+}
+
+.empty-hint {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+  color: #475569;
+  font-size: 13px;
+  backdrop-filter: blur(8px);
+}
+
+.status-chip {
+  position: absolute;
+  right: 22px;
+  bottom: 22px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #0f172a;
+  color: #fff;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.3);
+  font-size: 12px;
+  z-index: 500;
+}

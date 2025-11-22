@@ -1,0 +1,77 @@
+.photo-window .panel-body {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 12px;
+}
+
+.photo-window-body img {
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+  object-fit: contain;
+}
+
+.photo-preview-shell {
+  position: fixed;
+  inset: 0;
+  background: rgba(12, 17, 28, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2100;
+  pointer-events: auto;
+}
+
+.photo-preview-panel {
+  width: min(70vw, 560px);
+  max-width: 100%;
+  border-radius: 18px;
+  border: 1px solid rgba(226, 232, 240, 0.5);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 26px 60px rgba(2, 6, 23, 0.45);
+  overflow: hidden;
+  animation: popIn 0.25s ease-out forwards;
+}
+
+.photo-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.photo-preview-body {
+  padding: 12px;
+}
+
+.photo-preview-body img {
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+}
+
+.close-button {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: #0f172a;
+  color: #fff;
+  font-size: 18px;
+  line-height: 0;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+@keyframes popIn {
+  from {
+    transform: scale(0.85);
+  }
+  to {
+    transform: scale(1);
+  }
+}

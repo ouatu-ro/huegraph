@@ -1,0 +1,37 @@
+:root {
+  height: 100%;
+  font-family: "Sora", "Inter", "SF Pro Display", -apple-system, system-ui,
+    sans-serif;
+  background: #0b1220;
+  color: #0f172a;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  height: 100%;
+  background: radial-gradient(
+      circle at 30% 20%,
+      rgba(59, 130, 246, 0.12),
+      transparent 28%
+    ),
+    radial-gradient(circle at 70% 0%, rgba(45, 212, 191, 0.16), transparent 32%),
+    linear-gradient(180deg, #0b1220, #0f172a 60%, #0b1220 100%);
+  color: #0f172a;
+  overflow: hidden;
+}
+
+#root,
+.no-select,
+.no-select * {
+  user-select: none;
+}
+
+#root {
+  height: 100%;
+}
