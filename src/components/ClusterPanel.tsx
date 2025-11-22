@@ -2,7 +2,8 @@ import type { Accessor } from "solid-js";
 import { For, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
 import interact from "interactjs";
 import Muuri from "muuri";
-import ClusterPieChart from "./ClusterPieChart";
+import ActionMenu from "./ActionMenu";
+import PieChartWindow from "./PieChartWindow";
 import type { PanelPlacement, ClusterColorPart } from "../types";
 import { styleFor } from "../utils/panelStyle";
 import {
@@ -35,8 +36,9 @@ export default function ClusterPanel(props: ClusterPanelProps) {
   let bodyRef: HTMLDivElement | undefined;
   let grid: Muuri | undefined;
   let resizeObserver: ResizeObserver | undefined;
-  const [selectedAction, setSelectedAction] = createSignal("");
-  const [showChart, setShowChart] = createSignal(false);
+  const [chartPlacement, setChartPlacement] = createSignal<PanelPlacement | null>(null);
+  const [chartOpen, setChartOpen] = createSignal(false);
+  const [chartZ, setChartZ] = createSignal(0);
 
   const panelState = () => props.state() ?? props.fallback;
 
@@ -45,11 +47,42 @@ export default function ClusterPanel(props: ClusterPanelProps) {
     return `Group ${props.label + 1}`;
   };
 
+  const openChartWindow = () => {
+    const existing = chartPlacement();
+    if (existing) {
+      const nextZ = Math.max(chartZ(), (existing.zIndex ?? 0) + 1);
+      setChartZ(nextZ);
+      setChartPlacement({ ...existing, zIndex: nextZ });
+      setChartOpen(true);
+      return;
+    }
+    const base = panelState();
+    const width = 480;
+    const height = 380;
+    const centerX = (base?.x ?? 0) + (base?.width ?? width) / 2;
+    const centerY = (base?.y ?? 0) + (base?.height ?? height) / 2;
+    const nextZ = Math.max(chartZ(), (base?.zIndex ?? 0) + 1);
+    setChartZ(nextZ);
+    setChartPlacement({
+      id: `chart-${props.label}`,
+      x: centerX - width / 2,
+      y: centerY - height / 2,
+      width,
+      height,
+      zIndex: nextZ,
+    });
+    setChartOpen(true);
+  };
+
+  const bringChartToFront = () => {
+    const nextZ = chartZ() + 1;
+    setChartZ(nextZ);
+    setChartPlacement((prev) => (prev ? { ...prev, zIndex: nextZ } : prev));
+  };
+
   const handleAction = (value: string) => {
-    if (!value) return;
-    setSelectedAction("");
     if (value === "focus") props.onFocus();
-    if (value === "chart") setShowChart(true);
+    if (value === "chart") openChartWindow();
   };
 
   const rebuildGrid = () => {
@@ -155,76 +188,79 @@ export default function ClusterPanel(props: ClusterPanelProps) {
   });
 
   return (
-    <div
-      ref={panelRef}
-      class="panel-window cluster-panel"
-      style={styleFor(panelState())}
-      onMouseDown={() => props.bringToFront()}
-      onTouchStart={() => props.bringToFront()}
-    >
+    <>
       <div
-        class="panel-header"
-        onDblClick={(e) => {
-          e.stopPropagation();
-          props.onMaximizeToggle();
-        }}
+        ref={panelRef}
+        class="panel-window cluster-panel"
+        style={styleFor(panelState())}
+        onMouseDown={() => props.bringToFront()}
+        onTouchStart={() => props.bringToFront()}
       >
-        <div>
-          <div class="panel-title">{titleFor()}</div>
-          <div class="panel-subtitle">{props.count} items</div>
-        </div>
-        <div class="cluster-actions">
-          <select
-            class="cluster-action-select"
-            value={selectedAction()}
-            onChange={(e) => handleAction(e.currentTarget.value)}
-          >
-            <option value="">Actions…</option>
-            <option value="focus">Bring into view</option>
-            <option value="chart">Color families pie</option>
-          </select>
-        </div>
-      </div>
-      <div ref={bodyRef} class="panel-body">
-        <Show when={showChart()}>
-          <ClusterPieChart parts={props.distribution} onClose={() => setShowChart(false)} />
-        </Show>
         <div
-          ref={gridRef}
-          class="muuri-grid"
-          style={{
-            transform: `scale(${1 / props.zoom()})`,
-            "transform-origin": "0 0",
-            width: `${100 * props.zoom()}%`,
+          class="panel-header"
+          onDblClick={(e) => {
+            e.stopPropagation();
+            props.onMaximizeToggle();
           }}
         >
-          <For each={props.items}>
-            {(idx) => (
-              <div
-                class="item"
-                style={{
-                  width: `${CLUSTER_THUMB_SIZE * props.zoom()}px`,
-                  height: `${CLUSTER_THUMB_SIZE * props.zoom()}px`,
-                  margin: `${CLUSTER_THUMB_MARGIN * props.zoom()}px`,
-                }}
-                onDblClick={() => props.onPhotoPreview(idx)}
-              >
-                <div class="item-content">
-                  <img
-                    class="thumb"
-                    width={CLUSTER_THUMB_SIZE}
-                    height={CLUSTER_THUMB_SIZE}
-                    src={props.imageForIndex(idx)}
-                    loading="lazy"
-                    alt=""
-                  />
-                </div>
-              </div>
-            )}
-          </For>
+          <div>
+            <div class="panel-title">{titleFor()}</div>
+            <div class="panel-subtitle">{props.count} items</div>
+          </div>
+          <div class="cluster-actions">
+            <ActionMenu onSelect={handleAction} />
+          </div>
         </div>
+        <div ref={bodyRef} class="panel-body">
+          <div
+            ref={gridRef}
+            class="muuri-grid"
+            style={{
+              transform: `scale(${1 / props.zoom()})`,
+              "transform-origin": "0 0",
+              width: `${100 * props.zoom()}%`,
+            }}
+          >
+            <For each={props.items}>
+              {(idx) => (
+                <div
+                  class="item"
+                  style={{
+                    width: `${CLUSTER_THUMB_SIZE * props.zoom()}px`,
+                    height: `${CLUSTER_THUMB_SIZE * props.zoom()}px`,
+                    margin: `${CLUSTER_THUMB_MARGIN * props.zoom()}px`,
+                  }}
+                  onDblClick={() => props.onPhotoPreview(idx)}
+                >
+                  <div class="item-content">
+                    <img
+                      class="thumb"
+                      width={CLUSTER_THUMB_SIZE}
+                      height={CLUSTER_THUMB_SIZE}
+                      src={props.imageForIndex(idx)}
+                      loading="lazy"
+                      alt=""
+                    />
+                  </div>
+                </div>
+              )}
+            </For>
+          </div>
+        </div>
+        <div class="resize-handle" />
       </div>
-      <div class="resize-handle" />
-    </div>
+      <Show when={chartOpen() && chartPlacement()}>
+        <PieChartWindow
+          placement={chartPlacement()!}
+          data={props.distribution}
+          onClose={() => setChartOpen(false)}
+          onUpdate={(patch) =>
+            setChartPlacement((prev) => (prev ? { ...prev, ...patch } : prev))
+          }
+          bringToFront={bringChartToFront}
+          zoom={props.zoom}
+        />
+      </Show>
+    </>
   );
 }

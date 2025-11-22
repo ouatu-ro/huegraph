@@ -3,6 +3,7 @@
   justify-content: center;
   align-items: center;
   padding: 12px;
+  overflow: hidden;
 }
 
 .photo-window-body img {
